@@ -192,6 +192,7 @@ class ObjInf:
     background: int
     obj000_ops:list
     obj_ops:list
+    obj_weight:int = 0       #相同颜色，相同位置，相同行列
     obj_VSA:None
 
 def objects_fromone_params(the_pair_id: int, in_or_out: str, grid: Grid, bools: Tuple[bool, bool, bool],hw:list) -> Objects:
@@ -201,7 +202,7 @@ def objects_fromone_params(the_pair_id: int, in_or_out: str, grid: Grid, bools: 
 param_combinations: List[Tuple[bool, bool]] = [
     (True, True, False) ]
 
-def all_objects_from_grid(the_pair_id: int, in_or_out: str, grid: Grid, hw:list) -> FrozenSet[Object]:
+def all_objects_from_grid(the_pair_id: int, in_or_out: str, grid: Grid, hw:list, weight = 0 ) -> FrozenSet[Object]:
     acc: FrozenSet[Object] = frozenset()  # 初始化空集合
     for params in param_combinations:
         acc = acc.union(objects_fromone_params(the_pair_id, in_or_out, grid, params,hw))
@@ -491,7 +492,7 @@ def encode_object(obj, grid_size):
     return obj_encoding
 
 
-
+#!to be add diff grid
 def encode_all_object_sets(object_sets, train_data_size):
     """
     为所有训练数据对的所有对象生成编码
@@ -643,6 +644,11 @@ for jj, tid in enumerate(train_tasks):
         # print(data_pair)
         I  = data_pair['input']
         O  = data_pair['output']
+
+        diff_I,diff_O = grid2grid_fromgriddiff(I, O)
+
+
+
         I = tuple(tuple(row) for row in I)
         O = tuple(tuple(row) for row in O)
         # print(I)
@@ -652,6 +658,9 @@ for jj, tid in enumerate(train_tasks):
 
         object_sets[f"out_obj_set_{pair_id}"]  = all_objects_from_grid(the_pair_id=pair_id,in_or_out="out",grid=O, hw=(height_o, width_o) )
         object_sets[f"in_obj_set_{pair_id}"]  = all_objects_from_grid(the_pair_id=pair_id,in_or_out="in",grid=I, hw=(height_i, width_i) )
+
+        object_sets[f"out_obj_set_diff_{pair_id}"]  = all_objects_from_grid(the_pair_id=pair_id,in_or_out="out",grid=diff_O, hw=(height_o, width_o),weight = 10 )
+        object_sets[f"in_obj_set_diff_{pair_id}"]  = all_objects_from_grid(the_pair_id=pair_id,in_or_out="in",grid=diff_I, hw=(height_i, width_i),weight = 10 )
 
         print("\n\nlen object_sets ",len(object_sets))
         # print(object_sets[f"out_obj_set_{pair_id}"])
@@ -689,8 +698,8 @@ for jj, tid in enumerate(train_tasks):
     formatted_time = current_utc_time.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]  # 截取前三位毫秒
     # 打印时间
     print(f"Current Date and Time (UTC - YYYY-MM-DD HH:MM:SS.sss formatted): {formatted_time}")
-
-    all_encodings = encode_all_object_sets(object_sets, len(train_data))
+    #! add diff grid  len *2  fix 后续
+    all_encodings = encode_all_object_sets(object_sets, len(train_data)*2  )
 
     # 分析所有编码
     results_dir = "vsa_analysis_results"
