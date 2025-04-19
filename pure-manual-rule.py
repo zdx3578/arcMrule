@@ -618,7 +618,8 @@ from IPython.display import display, Image, Markdown, HTML
 
 
 for jj, tid in enumerate(train_tasks):
-    tid = '009d5c81'
+    # tid = '009d5c81'
+    tid = '045e512c'
     if tid in train_tasks.keys():
         train_or_eval = 'train'
         task = train_tasks[tid]
@@ -630,9 +631,9 @@ for jj, tid in enumerate(train_tasks):
 
     save_file = f"{FIGURES_PATH}/{tid}_train.png"
     print(f'Train task {jj}: {tid}')
-    plot_task(task, f"({jj}) {tid}   {train_or_eval}",
-              task_solution=task_solution,
-              save_file=None)
+    # plot_task(task, f"({jj}) {tid}   {train_or_eval}",
+    #           task_solution=task_solution,
+    #           save_file=None)
     time.sleep(0.05)
 
     object_sets = {}
@@ -658,18 +659,15 @@ for jj, tid in enumerate(train_tasks):
         height_o, width_o = height(O), width(O)
 
 
-        weight_grid = process_grid_with_weights(I, O)
+        weight_grid_in,weight_grid_out = process_grid_with_weights(I, O)
 
-
-        display_matrices(weight_grid, is_grid_format=True)
-        corrected_grid = apply_weight_correction(weight_grid, scale_factor=10)
-
-        # 显示修正后的权重网格
-        display_weight_grid(corrected_grid, title="修正后的权重网格")
+        for weight_grid in [weight_grid_in, weight_grid_out]:
+            display_matrices(weight_grid, is_grid_format=True)
+            corrected_grid = apply_weight_correction(weight_grid, scale_factor=10)
+            display_weight_grid(corrected_grid, title="修正后的权重网格")
 
         # 显示权重热图
         # visualize_weights_as_heatmap(corrected_grid, title="权重热图")
-
         # weight_grid = apply_weight_correction(weight_grid, scale_factor=10)
         # display_matrices(weight_grid,(height_o, width_o))
 
