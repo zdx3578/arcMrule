@@ -128,20 +128,8 @@ def plot_task(task1, text, task_solution=None, save_file=None):
 
 
 # In[ ]:
-
-
-from dataclasses import dataclass
 import sys
-print(sys.version)
-sys.path.append('/kaggle/input/3-28arcdsl')
-from dsl import *
-from dsl2 import *
-sys.path.append('/kaggle/input/3-28arcdsl/forpopper2')
-sys.path.append('/kaggle/input/3-28arcdsl/bateson')
-
 import os
-
-
 # 定义可能的路径列表
 possible_pypaths = [
     '/kaggle/input/3-28arcdsl'
@@ -170,6 +158,18 @@ print("Current sys.path:")
 for p in sys.path:
     print(p)
 
+from dsl import *
+from dsl2 import *
+from dataclasses import dataclass
+
+print(sys.version)
+
+
+
+
+
+
+
 
 from objutil import  *
 # from objutil2plus import * # shift_pure_obj_to_0_0_0,shift_pure_obj_to_00,IdManager
@@ -192,7 +192,7 @@ class ObjInf:
     background: int
     obj000_ops:list
     obj_ops:list
-    obj_weight:int = 0       #相同颜色，相同位置，相同行列
+    obj_weight:int        #相同颜色，相同位置，相同行列
     obj_VSA:None
 
 def objects_fromone_params(the_pair_id: int, in_or_out: str, grid: Grid, bools: Tuple[bool, bool, bool],hw:list) -> Objects:
@@ -234,47 +234,47 @@ def all_objects_from_grid(the_pair_id: int, in_or_out: str, grid: Grid, hw:list,
         result.append(new_obj)
     return result
 
-def display_matrices(diff1: List[Tuple[int, Tuple[int, int]]],HW:list,
-                          diff2: Optional[List[Tuple[int, Tuple[int, int]]]] = None,
-                          diff3: Optional[List[Tuple[int, Tuple[int, int]]]] = None):
-    """
-    展示所有不同元素位置的二维矩阵，不按数值分组，所有内容一次性打印到一起。
+# def display_matrices(diff1: List[Tuple[int, Tuple[int, int]]],HW:list,
+#                           diff2: Optional[List[Tuple[int, Tuple[int, int]]]] = None,
+#                           diff3: Optional[List[Tuple[int, Tuple[int, int]]]] = None):
+#     """
+#     展示所有不同元素位置的二维矩阵，不按数值分组，所有内容一次性打印到一起。
 
-    参数:
-    - diff1: 必填，包含不同元素及其位置的集合。
-    - diff2, diff3: 可选，额外的不同元素及其位置集合。
-    """
-    # 合并所有不同元素的位置
-    combined = list(diff1) + (diff2 if diff2 else []) + (diff3 if diff3 else [])
+#     参数:
+#     - diff1: 必填，包含不同元素及其位置的集合。
+#     - diff2, diff3: 可选，额外的不同元素及其位置集合。
+#     """
+#     # 合并所有不同元素的位置
+#     combined = list(diff1) + (diff2 if diff2 else []) + (diff3 if diff3 else [])
 
-    if not combined:
-        print("无差异")
-        return
+#     if not combined:
+#         print("无差异")
+#         return
 
-    # 确定矩阵的大小（所有位置的最大行和最大列）
-    # max_row = max(pos[0] for _, pos in combined) + 1
-    # max_col = max(pos[1] for _, pos in combined) + 1
-    max_row = HW[0]
-    max_col = HW[1]
+#     # 确定矩阵的大小（所有位置的最大行和最大列）
+#     # max_row = max(pos[0] for _, pos in combined) + 1
+#     # max_col = max(pos[1] for _, pos in combined) + 1
+#     max_row = HW[0]
+#     max_col = HW[1]
 
-    # 初始化空矩阵，初始内容为空格
-    matrix = [[' ' for _ in range(max_col)] for _ in range(max_row)]
+#     # 初始化空矩阵，初始内容为空格
+#     matrix = [[' ' for _ in range(max_col)] for _ in range(max_row)]
 
-    # 填充矩阵：如果同一位置有多个值，则用逗号连接显示
-    for value, (row, col) in combined:
-        current = matrix[row][col]
-        text = str(value)
-        if current == ' ':
-            matrix[row][col] = text
-        else:
-            matrix[row][col] = current + ',' + text
+#     # 填充矩阵：如果同一位置有多个值，则用逗号连接显示
+#     for value, (row, col) in combined:
+#         current = matrix[row][col]
+#         text = str(value)
+#         if current == ' ':
+#             matrix[row][col] = text
+#         else:
+#             matrix[row][col] = current + ',' + text
 
-    # 打印带有边框的矩阵
-    border = "+" + "-" * (max_col * 2 - 1) + "+"
-    print(border)
-    for row in matrix:
-        print("|" + " ".join(row) + "|")
-    print(border)
+#     # 打印带有边框的矩阵
+#     border = "+" + "-" * (max_col * 2 - 1) + "+"
+#     print(border)
+#     for row in matrix:
+#         print("|" + " ".join(row) + "|")
+#     print(border)
 
 
 # In[ ]:
@@ -610,6 +610,7 @@ def compute_similarity_matrix(encodings, threshold=DEFAULT_SIMILARITY_THRESHOLD)
 
 
 import warnings
+from weightgird import *
 
 # 屏蔽 UserWarning 类型的警告
 warnings.filterwarnings("ignore", category=UserWarning)
@@ -632,7 +633,7 @@ for jj, tid in enumerate(train_tasks):
     plot_task(task, f"({jj}) {tid}   {train_or_eval}",
               task_solution=task_solution,
               save_file=None)
-    # time.sleep(0.5)
+    time.sleep(0.05)
 
     object_sets = {}
     print("\n\nlen object_sets ",len(object_sets))
@@ -655,6 +656,24 @@ for jj, tid in enumerate(train_tasks):
         # print(O)
         height_i, width_i = height(I), width(I)    # 输入对象的高度和宽度
         height_o, width_o = height(O), width(O)
+
+
+        weight_grid = process_grid_with_weights(I, O)
+
+
+        display_matrices(weight_grid, is_grid_format=True)
+        corrected_grid = apply_weight_correction(weight_grid, scale_factor=10)
+
+        # 显示修正后的权重网格
+        display_weight_grid(corrected_grid, title="修正后的权重网格")
+
+        # 显示权重热图
+        # visualize_weights_as_heatmap(corrected_grid, title="权重热图")
+
+        # weight_grid = apply_weight_correction(weight_grid, scale_factor=10)
+        # display_matrices(weight_grid,(height_o, width_o))
+
+
 
         object_sets[f"out_obj_set_{pair_id}"]  = all_objects_from_grid(the_pair_id=pair_id,in_or_out="out",grid=O, hw=(height_o, width_o) )
         object_sets[f"in_obj_set_{pair_id}"]  = all_objects_from_grid(the_pair_id=pair_id,in_or_out="in",grid=I, hw=(height_i, width_i) )
