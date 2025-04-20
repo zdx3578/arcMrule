@@ -195,44 +195,46 @@ class ObjInf:
     obj_weight:int        #相同颜色，相同位置，相同行列
     obj_VSA:None
 
-def objects_fromone_params(the_pair_id: int, in_or_out: str, grid: Grid, bools: Tuple[bool, bool, bool],hw:list) -> Objects:
-    b1, b2, b3 = bools  # 解包布尔值
-    return objects( grid, b1, b2, b3)
+# def objects_fromone_params(the_pair_id: int, in_or_out: str, grid: Grid, bools: Tuple[bool, bool, bool],hw:list) -> Objects:
+#     b1, b2, b3 = bools  # 解包布尔值
+#     return objects( grid, b1, b2, b3)
 
-param_combinations: List[Tuple[bool, bool]] = [
-    (True, True, False) ]
+# param_combinations: List[Tuple[bool, bool]] = [
+#     (True, True, False) ]
 
-def all_objects_from_grid(the_pair_id: int, in_or_out: str, grid: Grid, hw:list, weight = 0 ) -> FrozenSet[Object]:
-    acc: FrozenSet[Object] = frozenset()  # 初始化空集合
-    for params in param_combinations:
-        acc = acc.union(objects_fromone_params(the_pair_id, in_or_out, grid, params,hw))
-        # print()
-    result = []
-    bg = mostcolor(grid)
-    for obj in acc:
-        # 对每个 obj，计算对应平移后的版本
-        # 假设 obj 本身是一个表示对象的集合；如果不是，则请调整调用方式
-        obj00 = shift_pure_obj_to_00(obj)
-        obj000 = shift_pure_obj_to_0_0_0(obj)
-        new_obj = ObjInf(
-            pair_id='pair_id: '+str(the_pair_id),
-            in_or_out=in_or_out,
-            objparam="all",  # 使用传入的布尔值
-            obj=obj,         # 原始对象
-            obj_00=obj00,
-            obj_000=obj000,
-            # obj_ID=managerid.get_id("OBJshape", obj000),
-            obj_ID="obj-ID:"+str(managerid.get_id("OBJshape", obj000)),
-            grid_H_W=hw,            # 默认值，根据需要调整
-            bounding_box=(uppermost(obj), leftmost(obj), lowermost(obj), rightmost(obj)),    # 默认值，根据需要调整
-            color_ranking=palette(obj)    ,     # 默认空 tuple
-            background = bg,
-            obj000_ops=extend_obj(obj000),
-            obj_ops = extend_obj(obj),
-            obj_VSA = None
-        )
-        result.append(new_obj)
-    return result
+
+
+# def all_objects_from_grid(the_pair_id: int, in_or_out: str, grid: Grid, hw:list, weight = 0 ) -> FrozenSet[Object]:
+#     acc: FrozenSet[Object] = frozenset()  # 初始化空集合
+#     for params in param_combinations:
+#         acc = acc.union(objects_fromone_params(the_pair_id, in_or_out, grid, params,hw))
+#         # print()
+#     result = []
+#     bg = mostcolor(grid)
+#     for obj in acc:
+#         # 对每个 obj，计算对应平移后的版本
+#         # 假设 obj 本身是一个表示对象的集合；如果不是，则请调整调用方式
+#         obj00 = shift_pure_obj_to_00(obj)
+#         obj000 = shift_pure_obj_to_0_0_0(obj)
+#         new_obj = ObjInf(
+#             pair_id='pair_id: '+str(the_pair_id),
+#             in_or_out=in_or_out,
+#             objparam="all",  # 使用传入的布尔值
+#             obj=obj,         # 原始对象
+#             obj_00=obj00,
+#             obj_000=obj000,
+#             # obj_ID=managerid.get_id("OBJshape", obj000),
+#             obj_ID="obj-ID:"+str(managerid.get_id("OBJshape", obj000)),
+#             grid_H_W=hw,            # 默认值，根据需要调整
+#             bounding_box=(uppermost(obj), leftmost(obj), lowermost(obj), rightmost(obj)),    # 默认值，根据需要调整
+#             color_ranking=palette(obj)    ,     # 默认空 tuple
+#             background = bg,
+#             obj000_ops=extend_obj(obj000),
+#             obj_ops = extend_obj(obj),
+#             obj_VSA = None
+#         )
+#         result.append(new_obj)
+#     return result
 
 # def display_matrices(diff1: List[Tuple[int, Tuple[int, int]]],HW:list,
 #                           diff2: Optional[List[Tuple[int, Tuple[int, int]]]] = None,
@@ -642,6 +644,9 @@ for jj, tid in enumerate(train_tasks):
     train_data = task['train']
     test_data = task['test']
 
+    weight_grids = apply_object_weights_for_arc_task(task)
+
+
     for pair_id, data_pair in enumerate(train_data):
         # print(data_pair)
         I  = data_pair['input']
@@ -663,7 +668,7 @@ for jj, tid in enumerate(train_tasks):
 
         for weight_grid in [weight_grid_in, weight_grid_out]:
             display_matrices(weight_grid, is_grid_format=True)
-            corrected_grid = apply_weight_correction(weight_grid, scale_factor=10)
+            corrected_grid = apply_weight_correction(weight_grid, scale_factor=9)
             display_weight_grid(corrected_grid, title="修正后的权重网格")
 
         # 显示权重热图
