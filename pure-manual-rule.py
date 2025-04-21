@@ -645,7 +645,31 @@ for jj, tid in enumerate(train_tasks):
     test_data = task['test']
 
     weight_grids = apply_object_weights_for_arc_task(task)
+    # 正确的循环方式
+    for grid_id, weight_grid in weight_grids.items():
+        # grid_id 是如 'train_input_0', 'train_output_0', 'test_input_0' 这样的字符串
+        display_matrices(weight_grid, is_grid_format=True)
+        corrected_grid,cgridint = normalize_weight_grid(weight_grid)
+        display_weight_grid(corrected_grid, title=f"修正后的权重网格 - {grid_id}")
+        display_weight_grid(cgridint, title=f"修正后的权重网格 - {grid_id}")
+        print
+        # display_matrices(weight_grid, is_grid_format=True)
+        # corrected_grid = apply_weight_correction(weight_grid, scale_factor=10)
+        # display_weight_grid(corrected_grid, title=f"修正后的权重网格 - {grid_id}")
 
+
+    # 按train_input, train_output, test_input分组显示
+    # grid_types = ['train_input', 'train_output', 'test_input']
+    # for grid_type in grid_types:
+    #     for pair_id in range(len(train_data if 'train' in grid_type else test_data)):
+    #         grid_id = f"{grid_type}_{pair_id}"
+    #         if grid_id in weight_grids:
+    #             weight_grid = weight_grids[grid_id]
+    #             display_matrices(weight_grid, is_grid_format=True)
+    #             corrected_grid,cgridint = normalize_weight_grid(weight_grid)
+    #             display_weight_grid(corrected_grid, title=f"修正后的权重网格 - {grid_id}")
+    #             display_weight_grid(cgridint, title=f"修正后的权重网格 - {grid_id}")
+    #             print
 
     for pair_id, data_pair in enumerate(train_data):
         # print(data_pair)
@@ -664,13 +688,7 @@ for jj, tid in enumerate(train_tasks):
         height_o, width_o = height(O), width(O)
 
 
-        weight_grid_in,weight_grid_out = process_grid_with_weights(I, O)
-
-        for weight_grid in [weight_grid_in, weight_grid_out]:
-            display_matrices(weight_grid, is_grid_format=True)
-            corrected_grid = apply_weight_correction(weight_grid, scale_factor=9)
-            display_weight_grid(corrected_grid, title="修正后的权重网格")
-
+        # weight_grid_in,weight_grid_out = process_grid_with_weights(I, O)
         # 显示权重热图
         # visualize_weights_as_heatmap(corrected_grid, title="权重热图")
         # weight_grid = apply_weight_correction(weight_grid, scale_factor=10)
