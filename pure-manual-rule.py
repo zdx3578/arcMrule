@@ -620,8 +620,8 @@ from IPython.display import display, Image, Markdown, HTML
 
 
 for jj, tid in enumerate(train_tasks):
-    # tid = '009d5c81'
-    tid = '045e512c'
+    tid = '009d5c81'
+    # tid = '045e512c'
     if tid in train_tasks.keys():
         train_or_eval = 'train'
         task = train_tasks[tid]
@@ -648,11 +648,11 @@ for jj, tid in enumerate(train_tasks):
     # 正确的循环方式
     for grid_id, weight_grid in weight_grids.items():
         # grid_id 是如 'train_input_0', 'train_output_0', 'test_input_0' 这样的字符串
-        display_matrices(weight_grid, is_grid_format=True)
+        display_weight_grid(weight_grid, title=f"{grid_id}")
         corrected_grid,cgridint = normalize_weight_grid(weight_grid)
-        display_weight_grid(corrected_grid, title=f"修正后的权重网格 - {grid_id}")
+        # display_weight_grid(corrected_grid, title=f"修正后的权重网格 - {grid_id}")
         display_weight_grid(cgridint, title=f"修正后的权重网格 - {grid_id}")
-        print
+        print('\n\n\n\n\n\n\n\n\n\n')
         # display_matrices(weight_grid, is_grid_format=True)
         # corrected_grid = apply_weight_correction(weight_grid, scale_factor=10)
         # display_weight_grid(corrected_grid, title=f"修正后的权重网格 - {grid_id}")
