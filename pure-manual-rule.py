@@ -604,6 +604,52 @@ def compute_similarity_matrix(encodings, threshold=DEFAULT_SIMILARITY_THRESHOLD)
 
 
 
+def plot_weight_grids(weight_grids, text, save_file=None):
+    """绘制所有权重网格"""
+    # 按类型分组
+    grid_types = {
+        'train_input': [],
+        'train_output': [],
+        'test_input': []
+    }
+
+    for grid_id in weight_grids:
+        for grid_type in grid_types:
+            if grid_id.startswith(grid_type):
+                grid_types[grid_type].append(grid_id)
+
+    # 确定布局
+    num_pairs = max(len(grid_types['train_input']),
+                   len(grid_types['train_output']),
+                   len(grid_types['test_input']))
+
+    # 创建图形
+    fig, axs = plt.subplots(2, num_pairs, figsize=(3*num_pairs, 6))
+    plt.suptitle(f'{text}', fontsize=int(3*num_pairs*1.5), fontweight='bold', y=1)
+
+    # 绘制权重网格
+    for i, grid_id in enumerate(grid_types['train_input']):
+        _, grid_norm = normalize_weight_grid(weight_grids[grid_id])
+        axs[0, i].imshow(grid_norm, cmap=cmap, norm=norm)
+        axs[0, i].set_title(f"Input {i}")
+        axs[0, i].grid(True)
+
+    for i, grid_id in enumerate(grid_types['train_output']):
+        _, grid_norm = normalize_weight_grid(weight_grids[grid_id])
+        axs[1, i].imshow(grid_norm, cmap=cmap, norm=norm)
+        axs[1, i].set_title(f"Output {i}")
+        axs[1, i].grid(True)
+
+    # 设置样式
+    fig.patch.set_linewidth(3)
+    fig.patch.set_edgecolor('black')
+    fig.patch.set_facecolor('#dddddd')
+
+    if save_file is not None:
+        plt.savefig(save_file, bbox_inches='tight')
+
+    plt.show()
+
 
 
 # ## Plot all 1000 train tasks
@@ -633,9 +679,9 @@ for jj, tid in enumerate(train_tasks):
 
     save_file = f"{FIGURES_PATH}/{tid}_train.png"
     print(f'Train task {jj}: {tid}')
-    # plot_task(task, f"({jj}) {tid}   {train_or_eval}",
-    #           task_solution=task_solution,
-    #           save_file=None)
+    plot_task(task, f"({jj}) {tid}   {train_or_eval}",
+              task_solution=task_solution,
+              save_file=None)
     time.sleep(0.05)
 
     object_sets = {}
@@ -656,7 +702,7 @@ for jj, tid in enumerate(train_tasks):
         # display_matrices(weight_grid, is_grid_format=True)
         # corrected_grid = apply_weight_correction(weight_grid, scale_factor=10)
         # display_weight_grid(corrected_grid, title=f"修正后的权重网格 - {grid_id}")
-
+    plot_weight_grids(weight_grids, f"权重网格 - 任务 {tid}")
 
     # 按train_input, train_output, test_input分组显示
     # grid_types = ['train_input', 'train_output', 'test_input']
