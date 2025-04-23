@@ -1,0 +1,47 @@
+# Configuration for the ARC Solving Framework
+
+# Data directories
+data:
+  base_dir: "arc_data"
+  rules_dir: "rules"
+  patterns_dir: "patterns"
+  actions_dir: "actions"
+  knowledge_dir: "knowledge"
+
+# Object extraction settings
+object_extraction:
+  min_object_size: 1
+  max_object_size: 100
+  extract_sub_objects: true
+  max_sub_object_depth: 3  # Maximum recursion depth for sub-objects
+
+# Pattern recognition settings
+pattern_recognition:
+  min_confidence: 0.3
+  max_patterns_per_example: 10
+  temporal_weight: 0.7  # How much to weight recent patterns vs. old ones
+
+# Weight calculator settings
+weight_factors:
+  size: 1.0
+  color: 0.8
+  position: 0.6
+  shape: 0.7
+  repetition: 0.9
+
+# Rule engine settings
+rule_engine:
+  min_rule_confidence: 0.2
+  max_rules_to_apply: 5
+  combine_similar_rules: true
+
+# Logging settings
+logging:
+  enabled: true
+  level: "INFO"
+  file: "arc_framework.log"
+
+# Runtime settings
+runtime:
+  timeout_seconds: 30
+  max_iterations: 100
