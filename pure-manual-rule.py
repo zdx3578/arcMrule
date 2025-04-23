@@ -702,7 +702,7 @@ for jj, tid in enumerate(train_tasks):
         # display_matrices(weight_grid, is_grid_format=True)
         # corrected_grid = apply_weight_correction(weight_grid, scale_factor=10)
         # display_weight_grid(corrected_grid, title=f"修正后的权重网格 - {grid_id}")
-    plot_weight_grids(weight_grids, f"权重网格 - 任务 {tid}")
+    plot_weight_grids(weight_grids, f" ! Machine can see the gird weight ! - 任务 {tid}")
 
     # 按train_input, train_output, test_input分组显示
     # grid_types = ['train_input', 'train_output', 'test_input']
