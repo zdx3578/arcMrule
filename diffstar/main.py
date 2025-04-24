@@ -1,32 +1,70 @@
 import argparse
+import os
 from arc_solver import ARCSolver
 
 def main():
     """主程序入口"""
     parser = argparse.ArgumentParser(description='ARC任务解决器')
-    parser.add_argument('task_json', help='ARC任务JSON文件路径')
+    parser.add_argument('--task-id', help='要处理的单个任务ID')
+    parser.add_argument('--data-dir', help='ARC数据集目录路径')
     parser.add_argument('--output', '-o', default='results.json', help='结果输出文件路径')
+    parser.add_argument('--process-all', action='store_true', help='处理所有任务')
+    parser.add_argument('--task-type', choices=['train', 'eval', 'test'], default='train',
+                        help='处理的任务类型(用于--process-all)')
+    parser.add_argument('--limit', type=int, help='处理的最大任务数量')
     parser.add_argument('--debug', '-d', action='store_true', help='启用调试模式')
-    parser.add_argument('--debug-dir', default='debug_output', help='调试输出目录')
 
     args = parser.parse_args()
 
     # 初始化解决器
-    solver = ARCSolver(debug=args.debug, debug_dir=args.debug_dir)
+    solver = ARCSolver(data_dir=args.data_dir, debug=args.debug)
 
-    # 加载任务
-    task_data = solver.load_task(args.task_json)
-    if not task_data:
-        return
+    # 处理单个任务或所有任务
+    if args.process_all:
+        # 处理指定类型的所有任务
+        results = solver.process_all_tasks(task_type=args.task_type, limit=args.limit)
+    else:
+        # 如果没有指定任务ID，则默认选择第一个任务
+        task_id = args.task_id
+        if not task_id:
+            # 根据任务类型选择第一个任务
+            if args.task_type == 'train' and solver.train_tasks:
+                task_id = next(iter(solver.train_tasks.keys()))
+            elif args.task_type == 'eval' and solver.eval_tasks:
+                task_id = next(iter(solver.eval_tasks.keys()))
+            elif args.task_type == 'test' and solver.test_tasks:
+                task_id = next(iter(solver.test_tasks.keys()))
+            else:
+                print("错误：未指定任务ID且无法自动选择任务")
+                return 1
 
-    # 处理任务
-    results = solver.process_task(task_data)
+        task_data = solver.load_task(task_id)
+        if not task_data:
+            print(f"无法加载任务: {task_id}")
+            return 1
+
+        # 处理任务
+        results = solver.process_task(task_data)
 
     # 保存结果
-    solver.save_results(results, args.output)
+    if not solver.save_results(results, args.output):
+        print(f"无法保存结果到: {args.output}")
+        return 1
+
+    print(f"处理完成，结果已保存到: {args.output}")
+    return 0
 
 if __name__ == '__main__':
-    main()
+    exit(main())
 
 
-#!  python main.py path/to/task.json --output results.json --debug
+# python main.py --task-id 009d5c81
+
+
+# python main.py --process-all --task-type train
+
+# python main.py --process-all --task-type eval --limit 10
+
+# python main.py --data-dir /path/to/data --process-all --task-type train
+
+# python main.py --debug --task-id 009d5c81
