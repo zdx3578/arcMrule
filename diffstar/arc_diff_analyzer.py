@@ -485,7 +485,7 @@ class ARCDiffAnalyzer:
             output_grid: 输出网格
         """
         if self.debug:
-            self._debug_print(f"处理训练对 {pair_id}")
+            self._debug_print(f"处理 task pair ！训练对！ {pair_id}")
             self._debug_save_grid(input_grid, f"input_{pair_id}")
             self._debug_save_grid(output_grid, f"output_{pair_id}")
 

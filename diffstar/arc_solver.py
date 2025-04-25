@@ -185,13 +185,14 @@ class ARCSolver:
         task_id = task_data.get('id', 'unknown')
 
         if self.debug:
-            print(f"\n\n\n\n处理任务 {task_id}")
+            print(f"\n\n\n\n\n\n处理 task 任务 {task_id}")
 
         # 重置差异分析器
         self.diff_analyzer = ARCDiffAnalyzer()
 
         # 处理训练数据
         for i, example in enumerate(task['train']):
+            print(f"\n\n\n\n处理 task pair 数据对 {i} \n\n")
             input_grid = example['input']
             output_grid = example['output']
 
