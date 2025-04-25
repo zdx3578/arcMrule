@@ -1206,6 +1206,8 @@ class ARCDiffAnalyzer:
 
     # ==== 调试辅助方法 ====
 
+
+
     def _debug_print(self, message):
         """输出调试信息"""
         if self.debug:
@@ -1262,34 +1264,16 @@ class ARCDiffAnalyzer:
             obj_dict["index"] = i
             serializable_objects.append(obj_dict)
 
-        with open(obj_file, 'w') as f:
-            json.dump(serializable_objects, f, indent=2)
+        # 使用统一工具保存JSON
+        JSONSerializer.save_json(serializable_objects, obj_file)
 
     def _debug_save_json(self, data, name):
         """保存JSON数据"""
         if not self.debug:
             return
 
-        # 处理数据使其可序列化
-        def make_serializable(obj):
-            if isinstance(obj, dict):
-                return {k: make_serializable(v) for k, v in obj.items()}
-            elif isinstance(obj, list):
-                return [make_serializable(item) for item in obj]
-            elif isinstance(obj, tuple):
-                return list(make_serializable(item) for item in obj)
-            elif isinstance(obj, (int, float, str, bool, type(None))):
-                return obj
-            elif isinstance(obj, frozenset):
-                return list(make_serializable(item) for item in obj)
-            else:
-                return str(obj)
-
-        serializable_data = make_serializable(data)
-
         json_file = os.path.join(self.debug_dir, f"{name}.json")
-        with open(json_file, 'w') as f:
-            json.dump(serializable_data, f, indent=2)
+        JSONSerializer.save_json(data, json_file)
 
     def _debug_append_json(self, data, name):
         """追加JSON数据到文件"""
@@ -1297,29 +1281,63 @@ class ARCDiffAnalyzer:
             return
 
         json_file = os.path.join(self.debug_dir, f"{name}.json")
+        JSONSerializer.append_json(data, json_file)
 
-        # 处理数据使其可序列化
-        def make_serializable(obj):
-            if isinstance(obj, dict):
-                return {k: make_serializable(v) for k, v in obj.items()}
-            elif isinstance(obj, list):
-                return [make_serializable(item) for item in obj]
-            elif isinstance(obj, tuple):
-                return list(make_serializable(item) for item in obj)
-            elif isinstance(obj, (int, float, str, bool, type(None))):
+
+
+
+class JSONSerializer:
+    """统一的JSON序列化工具类"""
+
+    @staticmethod
+    def convert_to_serializable(obj: Any) -> Any:
+        """将任何对象递归转换为JSON可序列化格式"""
+        if isinstance(obj, (str, int, float, bool, type(None))):
+            return obj
+        elif isinstance(obj, (set, frozenset)):
+            return list(JSONSerializer.convert_to_serializable(item) for item in obj)
+        elif isinstance(obj, (list, tuple)):
+            return [JSONSerializer.convert_to_serializable(item) for item in obj]
+        elif isinstance(obj, dict):
+            return {str(k): JSONSerializer.convert_to_serializable(v) for k, v in obj.items()}
+        elif hasattr(obj, 'to_dict') and callable(getattr(obj, 'to_dict')):
+            # 如果对象有to_dict方法，调用它
+            return JSONSerializer.convert_to_serializable(obj.to_dict())
+        elif hasattr(obj, '__dict__'):
+            # 处理自定义类
+            return JSONSerializer.convert_to_serializable(obj.__dict__)
+        else:
+            # 对于其他类型，转为字符串
+            try:
+                json.dumps(obj)  # 测试是否可序列化
                 return obj
-            elif isinstance(obj, frozenset):
-                return list(make_serializable(item) for item in obj)
-            else:
+            except (TypeError, OverflowError):
                 return str(obj)
 
-        serializable_data = make_serializable(data)
+    @staticmethod
+    def save_json(data: Any, filepath: str, indent: int = 2) -> None:
+        """将数据保存为JSON文件"""
+        serializable_data = JSONSerializer.convert_to_serializable(data)
+
+        # 确保目录存在
+        os.makedirs(os.path.dirname(os.path.abspath(filepath)), exist_ok=True)
+
+        with open(filepath, 'w') as f:
+            json.dump(serializable_data, f, indent=indent)
+
+    @staticmethod
+    def append_json(data: Any, filepath: str, indent: int = 2) -> None:
+        """追加数据到JSON文件"""
+        serializable_data = JSONSerializer.convert_to_serializable(data)
+
+        # 确保目录存在
+        os.makedirs(os.path.dirname(os.path.abspath(filepath)), exist_ok=True)
 
         # 读取现有数据
         existing_data = []
-        if os.path.exists(json_file):
+        if os.path.exists(filepath):
             try:
-                with open(json_file, 'r') as f:
+                with open(filepath, 'r') as f:
                     existing_data = json.load(f)
             except:
                 existing_data = []
@@ -1331,5 +1349,14 @@ class ARCDiffAnalyzer:
             existing_data = [existing_data, serializable_data]
 
         # 保存更新后的数据
-        with open(json_file, 'w') as f:
-            json.dump(existing_data, f, indent=2)
+        with open(filepath, 'w') as f:
+            json.dump(existing_data, f, indent=indent)
+
+    @staticmethod
+    def load_json(filepath: str) -> Any:
+        """从JSON文件加载数据"""
+        if not os.path.exists(filepath):
+            return None
+
+        with open(filepath, 'r') as f:
+            return json.load(f)
