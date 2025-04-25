@@ -1,6 +1,46 @@
 import argparse
 import os
+
+
+import sys
+import os
+# 定义可能的路径列表
+possible_pypaths = [
+    '/kaggle/input/3-28arcdsl'
+    '/kaggle/input/3-28arcdsl/forpopper2',
+    '/kaggle/input/3-28arcdsl/bateson',
+    '/Users/zhangdexiang/github/VSAHDC/arcv2',
+    '/Users/zhangdexiang/github/VSAHDC/arcv2/forpopper2',
+    '/Users/zhangdexiang/github/VSAHDC/arcv2/bateson',
+    '/home/zdx/github/VSAHDC/arcv2',
+    '/home/zdx/github/VSAHDC/arcv2/forpopper2',
+    '/home/zdx/github/VSAHDC/arcv2/bateson',
+
+    '/another/path/to/check'
+]
+
+# 遍历路径列表，检查并按需加载
+for path in possible_pypaths:
+    if os.path.exists(path):
+        print(f"Adding path to sys.path: {path}")
+        sys.path.append(path)
+    else:
+        print(f"Path does not exist, skipping: {path}")
+
+# 打印最终的 sys.path 以确认结果
+print("Current sys.path:")
+for p in sys.path:
+    print(p)
+
+
 from arc_solver import ARCSolver
+
+
+
+
+
+
+
 
 def main():
     """主程序入口"""

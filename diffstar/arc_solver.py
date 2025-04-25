@@ -3,6 +3,13 @@ import os
 from typing import Dict, Any, List, Optional
 from arc_diff_analyzer import ARCDiffAnalyzer
 
+import sys
+import logging
+import traceback
+import cgitb
+cgitb.enable(format='text')
+
+
 class ARCSolver:
     """ARC问题解决器，使用差异网格分析"""
 
@@ -46,6 +53,7 @@ class ARCSolver:
                 self.data_dir = path
                 if self.debug:
                     print(f"数据路径设置为: {self.data_dir}")
+                print(f"数据路径设置为: {self.data_dir}")
                 return path
 
         # 如果所有路径都不存在，抛出异常
@@ -177,7 +185,7 @@ class ARCSolver:
         task_id = task_data.get('id', 'unknown')
 
         if self.debug:
-            print(f"处理任务 {task_id}")
+            print(f"\n\n\n\n处理任务 {task_id}")
 
         # 重置差异分析器
         self.diff_analyzer = ARCDiffAnalyzer()
@@ -267,6 +275,15 @@ class ARCSolver:
             except Exception as e:
                 if self.debug:
                     print(f"处理任务 {task_id} 失败: {e}")
+                tb_str = traceback.format_exc()
+                print(f"发生错误: {e}")
+                print(f"错误上下文:\n{tb_str}")
+                exc_type, exc_value, exc_traceback = sys.exc_info()
+                # 获取出错的文件名、行号、函数名和代码行
+                filename, line_number, func_name, code_line = traceback.extract_tb(exc_traceback)[-1]
+                print(f"错误: {e}")
+                print(f"发生在文件 {filename}, 第 {line_number} 行, 函数 {func_name}")
+                print(f"错误代码: {code_line}")
 
         return results
 

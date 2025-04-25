@@ -11,6 +11,32 @@ from objutil import all_pureobjects_from_grid, objects_fromone_params
 from weightgird import grid2grid_fromgriddiff
 from objutil import shift_pure_obj_to_0_0_0, uppermost, leftmost, lowermost, rightmost, palette, extend_obj
 
+
+def shift_to_origin(obj, preserve_colors=True):
+    """
+    将对象集合移到左上角(0,0)，并可选择是否保留颜色信息。
+    将输入转换为可哈希的frozenset。
+    """
+    # 如果输入为空，直接返回空frozenset
+    if not obj:
+        return frozenset()
+
+    # 计算最小行列值
+    min_row = float('inf')
+    min_col = float('inf')
+
+    for _, (r, c) in obj:
+        min_row = min(min_row, r)
+        min_col = min(min_col, c)
+
+    # 创建移动到原点的frozenset
+    if preserve_colors:
+        return frozenset([(color, (r - min_row, c - min_col))
+                         for color, (r, c) in obj])
+    else:
+        return frozenset([(0, (r - min_row, c - min_col))
+                         for color, (r, c) in obj])
+
 class ObjInfo:
     """增强型对象信息类，存储对象的所有相关信息和变换"""
 
@@ -32,10 +58,11 @@ class ObjInfo:
         self.obj_params = obj_params if obj_params else (True, True, False)
         self.grid_hw = grid_hw
         self.background = background
+        self.debug = True
 
         # 计算标准化对象
         self.obj_00 = self._shift_to_origin(obj)  # 移到左上角但保留颜色
-        self.obj_000 = shift_pure_obj_to_0_0_0(obj)  # 完全标准化（去色）
+        self.obj_000 = self._shift_to_origin(obj, preserve_colors=False)  # 完全标准化（去色）
 
         # 计算边界框
         self.bounding_box = (
@@ -61,7 +88,8 @@ class ObjInfo:
 
         # 转换后的对象变体
         self.rotated_variants = self._generate_rotated_variants()
-        self.mirrored_variants = self._generate_mirrored_variants()
+        self.mirrored_variants = self.obj000_ops
+        # self.mirrored_variants = self._generate_mirrored_variants()
 
         # 对象关系
         self.is_part_of = []  # 存储该对象是哪些对象的一部分
@@ -82,15 +110,9 @@ class ObjInfo:
             return max(color_counts.items(), key=lambda x: x[1])[0]
         return None
 
-    def _shift_to_origin(self, obj):
-        """将对象移到左上角(0,0)但保留颜色信息"""
-        if not obj:
-            return frozenset()
-
-        min_row = min([pos[0] for _, pos in obj]) if obj else 0
-        min_col = min([pos[1] for _, pos in obj]) if obj else 0
-
-        return frozenset([(val, (r - min_row, c - min_col)) for val, (r, c) in obj])
+    def _shift_to_origin(self, obj, preserve_colors=True):
+        """类方法版本，调用独立函数实现"""
+        return shift_to_origin(obj, preserve_colors)
 
     def _generate_rotated_variants(self):
         """生成对象的所有旋转变体"""
@@ -415,7 +437,7 @@ class ARCDiffAnalyzer:
     专注于基于对象形状的分析和变换识别
     """
 
-    def __init__(self, debug=False, debug_dir="debug_output"):
+    def __init__(self, debug=True, debug_dir="debug_output"):
         """
         初始化分析器
 
