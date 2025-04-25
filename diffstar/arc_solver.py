@@ -43,6 +43,7 @@ class ARCSolver:
             '/kaggle/input/arc-prize-2025',
             '/Users/zhangdexiang/github/ARC-AGI-2/arc-prize-2025',
             '/home/zdx/github/VSAHDC/arc-prize-2025',
+            "/home/zdx/github/ARC-AGI-2/arc-prize-2025/"
             './data',
             './arc-data'
         ]
