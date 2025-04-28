@@ -742,9 +742,8 @@ class ARCDiffAnalyzer:
 
                 if matches:
                     # 计算匹配置信度
-                    confidence = self._calculate_transformation_confidence(
-                        in_obj, out_obj, transform_type, transform_name
-                    )
+                    confidence = 1 #self._calculate_transformation_confidence(
+                        # in_obj, out_obj, transform_type, transform_name                    )
 
                     if confidence > best_confidence:
                         best_confidence = confidence

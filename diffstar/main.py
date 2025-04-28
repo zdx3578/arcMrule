@@ -101,7 +101,8 @@ if __name__ == '__main__':
 # python main.py --task-id 009d5c81
 
 
-# python main.py --process-all --task-type train
+# python main.py --process-all --task-type train --debug
+
 
 # python main.py --process-all --task-type eval --limit 10
 
