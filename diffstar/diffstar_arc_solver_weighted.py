@@ -210,42 +210,75 @@ class WeightedARCSolver:
             os.makedirs(f"weighted_debug_output/{task_id}", exist_ok=True)
 
         # 处理训练数据
-        for i, example in enumerate(task['train']):
-            print(f"\n\n\n\n处理 task pair 数据对 {i} \n\n")
-            input_grid = example['input']
-            output_grid = example['output']
+        param_combinations3: List[Tuple[bool, bool, bool]] = [
+            (False, False, False),
+            (False, False, True),
+            (False, True, False),
+            (False, True, True),
+            (True, True, False),
+            (True, True, True),
+            (True, False, False),
+            (True, False, True)  ]
 
-            # 添加到差异分析器
-            self.diff_analyzer.add_train_pair(i, input_grid, output_grid)
+        param_combinations2: List[Tuple[bool, bool, bool]] = [
+            (True, True, False),
+            (True, True, True),
+            (True, False, False),
+            (True, False, True),
+            (False, False, False),
+            (False, False, True),
+            (False, True, False),
+            (False, True, True) ]
 
-        # 分析共有模式（使用带权重的版本）
-        common_patterns = self.diff_analyzer.analyze_common_patterns_with_weights()
+        param_combinations = [
+            (True, True, False),
+            (True, False, False),
+            (False, False, False),
+            (False, True, False)         ]
+        param_combinations0 = [
+            (True, True, False),
+            (True, False, False),
+            (False, False, False),
+            (False, True, False)       ]
 
-        # 处理测试数据
-        test_predictions = []
-        for example in task['test']:
-            input_grid = example['input']
 
-            # 应用共有模式进行预测
-            predicted_output = self.diff_analyzer.apply_common_patterns(input_grid)
+        for param in param_combinations:
+            for i, example in enumerate(task['train']):
+                print(f"\n\n\n\n处理 task pair 数据对 {i} \n\n")
+                input_grid = example['input']
+                output_grid = example['output']
 
-            test_predictions.append({
-                'input': example['input'],
-                'predicted_output': predicted_output
-            })
+                # 添加到差异分析器
+                self.diff_analyzer.add_train_pair(i, input_grid, output_grid, param)
 
-        return {
-            'task_id': task_id,
-            'common_patterns': common_patterns,
-            'mapping_rules': self.diff_analyzer.mapping_rules,
-            'test_predictions': test_predictions,
-            'weighted_info': {
-                'pixel_threshold_pct': self.diff_analyzer.pixel_threshold_pct,
-                'weight_increment': self.diff_analyzer.weight_increment,
-                'diff_weight_increment': self.diff_analyzer.diff_weight_increment,
-                'color_statistics': self.diff_analyzer.color_statistics
+            # 分析共有模式（使用带权重的版本）
+            common_patterns = self.diff_analyzer.analyze_common_patterns_with_weights()
+
+            # 处理测试数据
+            test_predictions = []
+            for example in task['test']:
+                input_grid = example['input']
+
+                # 应用共有模式进行预测
+                predicted_output = self.diff_analyzer.apply_common_patterns(input_grid,param)
+
+                test_predictions.append({
+                    'input': example['input'],
+                    'predicted_output': predicted_output
+                })
+
+            return {
+                'task_id': task_id,
+                'common_patterns': common_patterns,
+                'mapping_rules': self.diff_analyzer.mapping_rules,
+                'test_predictions': test_predictions,
+                'weighted_info': {
+                    'pixel_threshold_pct': self.diff_analyzer.pixel_threshold_pct,
+                    'weight_increment': self.diff_analyzer.weight_increment,
+                    'diff_weight_increment': self.diff_analyzer.diff_weight_increment,
+                    'color_statistics': self.diff_analyzer.color_statistics
+                }
             }
-        }
 
     def process_all_tasks(self, task_type='train', limit=None):
         """

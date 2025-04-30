@@ -7,10 +7,11 @@ import matplotlib.pyplot as plt
 import copy
 
 # 导入现有函数和类
-from objutil import all_pureobjects_from_grid, objects_fromone_params, shift_pure_obj_to_0_0_0
+from objutil import pureobjects_from_grid, objects_fromone_params, shift_pure_obj_to_0_0_0
 from objutil import uppermost, leftmost, lowermost, rightmost, palette, extend_obj
-from weightgird import grid2grid_fromgriddiff, apply_color_matching_weights
+from weightgird import grid2grid_fromgriddiff, apply_color_matching_weights, display_weight_grid, display_matrices
 from arc_diff_analyzer import ARCDiffAnalyzer, ObjInfo, JSONSerializer
+
 
 # 修改ObjInfo类，添加权重属性
 class WeightedObjInfo(ObjInfo):
@@ -57,7 +58,7 @@ class WeightedARCDiffAnalyzer(ARCDiffAnalyzer):
     """
 
     def __init__(self, debug=True, debug_dir="debug_output", pixel_threshold_pct=60,
-                 weight_increment=2, diff_weight_increment=5):
+                 weight_increment=1, diff_weight_increment=2):
         """
         初始化加权分析器
 
@@ -73,6 +74,13 @@ class WeightedARCDiffAnalyzer(ARCDiffAnalyzer):
 
         # 权重相关参数
         self.pixel_threshold_pct = pixel_threshold_pct
+
+        self.weight1 = 1
+        self.weight2 = 2
+        self.weight3 = 3
+        self.weight4 = 4
+        self.weight5 = 5
+
         self.weight_increment = weight_increment
         self.diff_weight_increment = diff_weight_increment
 
@@ -87,7 +95,7 @@ class WeightedARCDiffAnalyzer(ARCDiffAnalyzer):
             'diff_out': []  # [(pair_id, [WeightedObjInfo]), ...]
         }
 
-    def add_train_pair(self, pair_id, input_grid, output_grid):
+    def add_train_pair(self, pair_id, input_grid, output_grid, param):
         """
         添加一对训练数据，提取对象并计算权重
 
@@ -123,11 +131,11 @@ class WeightedARCDiffAnalyzer(ARCDiffAnalyzer):
         height_out, width_out = len(output_grid), len(output_grid[0])
 
         # 提取对象
-        input_objects = all_pureobjects_from_grid(
-            self.param_combinations, pair_id, 'in', input_grid, [height_in, width_in]
+        input_objects = pureobjects_from_grid(
+            param, pair_id, 'in', input_grid, [height_in, width_in]
         )
-        output_objects = all_pureobjects_from_grid(
-            self.param_combinations, pair_id, 'out', output_grid, [height_out, width_out]
+        output_objects = pureobjects_from_grid(
+            param, pair_id, 'out', output_grid, [height_out, width_out]
         )
 
         # 转换为加权对象信息
@@ -148,11 +156,11 @@ class WeightedARCDiffAnalyzer(ARCDiffAnalyzer):
         # 为diff网格也提取对象
         if diff_in is not None and diff_out is not None:
             height_diff, width_diff = len(diff_in), len(diff_in[0])
-            diff_in_objects = all_pureobjects_from_grid(
-                self.param_combinations, pair_id, 'diff_in', diff_in, [height_diff, width_diff]
+            diff_in_objects = pureobjects_from_grid(
+                param, pair_id, 'diff_in', diff_in, [height_diff, width_diff]
             )
-            diff_out_objects = all_pureobjects_from_grid(
-                self.param_combinations, pair_id, 'diff_out', diff_out, [height_diff, width_diff]
+            diff_out_objects = pureobjects_from_grid(
+                param, pair_id, 'diff_out', diff_out, [height_diff, width_diff]
             )
 
             # 转换为加权对象信息
@@ -239,6 +247,10 @@ class WeightedARCDiffAnalyzer(ARCDiffAnalyzer):
         input_pos_to_obj = self._create_position_object_map(input_obj_infos)
         output_pos_to_obj = self._create_position_object_map(output_obj_infos)
 
+        # 跟踪已增加权重的对象，避免重复增加
+        increased_input_objs = set()
+        increased_output_objs = set()
+
         # 如果有差异区域，为涉及差异的原始对象增加权重
         diff_in, diff_out = self.diff_pairs[-1]  # 最新添加的diff对
 
@@ -250,16 +262,24 @@ class WeightedARCDiffAnalyzer(ARCDiffAnalyzer):
                         pos = (i, j)
                         if pos in input_pos_to_obj:
                             for obj_info in input_pos_to_obj[pos]:
-                                obj_info.increase_weight(self.diff_weight_increment)
-                                if self.debug:
-                                    self._debug_print(f"增加位置 ({i},{j}) 的输入对象 {obj_info.obj_id} 权重，现在为 {obj_info.obj_weight}")
+                                # 确保每个对象只增加一次权重
+                                if obj_info.obj_id not in increased_input_objs:
+                                    obj_info.increase_weight(self.diff_weight_increment)
+                                    increased_input_objs.add(obj_info.obj_id)
+                                    if self.debug:
+                                        self._debug_print(f"增加位置涉及差异的输入对象 {obj_info.obj_id} 权重，现在为 {obj_info.obj_weight}")
 
                         # 检查该位置是否有输出对象
                         if pos in output_pos_to_obj:
                             for obj_info in output_pos_to_obj[pos]:
-                                obj_info.increase_weight(self.diff_weight_increment)
-                                if self.debug:
-                                    self._debug_print(f"增加位置 ({i},{j}) 的输出对象 {obj_info.obj_id} 权重，现在为 {obj_info.obj_weight}")
+                                # 确保每个对象只增加一次权重
+                                if obj_info.obj_id not in increased_output_objs:
+                                    obj_info.increase_weight(self.diff_weight_increment)
+                                    increased_output_objs.add(obj_info.obj_id)
+                                    if self.debug:
+                                        self._debug_print(f"增加位置涉及差异的输出对象 {obj_info.obj_id} 权重，现在为 {obj_info.obj_weight}")
+
+
 
         # 4. 基于形状匹配增加权重
         self._add_shape_matching_weights(input_obj_infos, output_obj_infos)
@@ -370,10 +390,13 @@ class WeightedARCDiffAnalyzer(ARCDiffAnalyzer):
                 # 如果对象主要由背景色组成，降低其权重
                 if bg_percentage > 80:  # 80%以上为背景色
                     # 将权重设为初始权重的一半
-                    new_weight = max(1, obj_info.obj_weight // 2)
+                    # new_weight = max(1, obj_info.obj_weight // 2)
+                    new_weight = 0
+
                     obj_info.set_weight(new_weight)
                     if self.debug:
                         self._debug_print(f"降低背景对象 {obj_info.obj_id} 权重至 {new_weight}，背景色占比 {bg_percentage:.1f}%")
+                        # display_matrices(obj_info.original_obj,obj_info.grid_hw )
 
     def _get_hashable_representation(self, obj_set):
         """
@@ -780,7 +803,7 @@ class WeightedARCDiffAnalyzer(ARCDiffAnalyzer):
         """覆盖父类方法，使用加权版本"""
         return self.analyze_common_patterns_with_weights()
 
-    def apply_common_patterns(self, input_grid):
+    def apply_common_patterns(self, input_grid, param):
         """
         将共有模式应用到新的输入网格，考虑权重
 
@@ -806,8 +829,8 @@ class WeightedARCDiffAnalyzer(ARCDiffAnalyzer):
         height, width = len(input_grid), len(input_grid[0])
 
         # 提取输入网格中的对象
-        input_objects = all_pureobjects_from_grid(
-            self.param_combinations, -1, 'test_in', input_grid, [height, width]
+        input_objects = pureobjects_from_grid(
+            param, -1, 'test_in', input_grid, [height, width]
         )
 
         # 转换为加权对象信息
