@@ -1250,7 +1250,7 @@ class WeightedARCDiffAnalyzer(ARCDiffAnalyzer):
 
     def _check_if_combined(self, output_obj, input_obj1, input_obj2):
         """检查输出对象是否是两个输入对象的组合"""
-        # 提取像素坐标集
+
         out_pixels = {loc for _, loc in output_obj.original_obj}
         in1_pixels = {loc for _, loc in input_obj1.original_obj}
         in2_pixels = {loc for _, loc in input_obj2.original_obj}
@@ -1389,3 +1389,470 @@ class WeightedARCDiffAnalyzer(ARCDiffAnalyzer):
             })
 
         return patterns
+
+    def apply_transformation_rules(self, input_grid, common_patterns, transformation_rules=None):
+        """
+        应用提取的转换规则，将输入网格转换为预测的输出网格
+
+        Args:
+            input_grid: 输入网格
+            common_patterns: 识别的共有模式
+            transformation_rules: 可选，特定的转换规则列表，如果不提供则使用当前累积的规则
+
+        Returns:
+            预测的输出网格
+        """
+        if self.debug:
+            self._debug_print(f"开始应用转换规则生成预测输出")
+
+        # 如果没有提供转换规则，使用当前的规则
+        if transformation_rules is None:
+            transformation_rules = self.transformation_rules
+
+        # 如果没有规则，无法生成预测
+        if not transformation_rules:
+            if self.debug:
+                self._debug_print("未提供转换规则，无法生成预测")
+            return input_grid  # 返回输入网格作为默认预测
+
+        # 深拷贝输入网格作为初始输出
+        output_grid = [list(row) for row in input_grid]
+
+        # 创建2D的转换记录，跟踪每个位置是否已被转换
+        transformed = [[False for _ in range(len(input_grid[0]))] for _ in range(len(input_grid))]
+
+        # 1. 提取输入网格的对象
+        input_obj_infos = []
+        for param in [(True, True, False), (True, False, False), (False, False, False), (False, True, False)]:
+            height, width = len(input_grid), len(input_grid[0])
+            objects = self._extract_objects_with_param(input_grid, param)
+
+            for obj in objects:
+                obj_info = self._create_obj_info(0, 'test_in', obj, param, height, width)
+                input_obj_infos.append(obj_info)
+
+        # 2. 计算输入对象的权重
+        weight_grid = self._calculate_object_weights(input_grid, input_obj_infos)
+
+        # 3. 按权重对对象排序（权重高的优先处理）
+        input_obj_infos.sort(key=lambda x: x.obj_weight if hasattr(x, 'obj_weight') else 0, reverse=True)
+
+        # 4. 尝试应用每个转换规则
+        for rule in transformation_rules:
+            # 根据规则中的"保留对象"列表，保留位置相同的对象
+            if 'preserved_objects' in rule and rule['preserved_objects']:
+                for preserved in rule['preserved_objects']:
+                    # 这些对象在输入和输出中位置相同，无需更改
+                    pass
+
+            # 应用"修改对象"列表，将输入对象按规则转换
+            if 'modified_objects' in rule and rule['modified_objects']:
+                for modification in rule['modified_objects']:
+                    # 找到输入中与修改对象特征匹配的对象
+                    for input_obj in input_obj_infos:
+                        # 检查是否可以应用此转换
+                        if self._can_apply_transformation(input_obj, modification):
+                            # 应用转换得到新对象
+                            transformed_obj = self._apply_object_transformation(
+                                input_obj, modification['transformation'])
+
+                            # 更新输出网格和转换记录
+                            for color, (i, j) in transformed_obj:
+                                if 0 <= i < len(output_grid) and 0 <= j < len(output_grid[0]):
+                                    output_grid[i][j] = color
+                                    transformed[i][j] = True
+
+            # 应用"移除对象"列表，从输出中移除指定对象
+            if 'removed_objects' in rule and rule['removed_objects']:
+                for removed in rule['removed_objects']:
+                    # 找到输入中与移除对象特征匹配的对象
+                    for input_obj in input_obj_infos:
+                        if self._match_object_pattern(input_obj, removed):
+                            # 从输出中移除此对象
+                            for _, (i, j) in input_obj.original_obj:
+                                if 0 <= i < len(output_grid) and 0 <= j < len(output_grid[0]):
+                                    # 设置为背景色（通常为0）
+                                    output_grid[i][j] = 0
+                                    transformed[i][j] = True
+
+            # 应用"添加对象"列表，在输出中添加新对象
+            if 'added_objects' in rule and rule['added_objects']:
+                for added in rule['added_objects']:
+                    # 检查添加对象的生成来源
+                    if 'generated_from' in added and added['generated_from']:
+                        for source in added['generated_from']:
+                            if source['type'] == 'transformed_input':
+                                # 从输入对象生成新对象
+                                input_id = source.get('input_obj_id')
+                                # 找到对应的输入对象
+                                for input_obj in input_obj_infos:
+                                    if hasattr(input_obj, 'obj_id') and str(input_obj.obj_id) == str(input_id):
+                                        # 应用变换
+                                        new_obj = self._generate_object_from_transformation(
+                                            input_obj, source['transformation'])
+
+                                        # 更新输出网格
+                                        for color, (i, j) in new_obj:
+                                            if 0 <= i < len(output_grid) and 0 <= j < len(output_grid[0]):
+                                                output_grid[i][j] = color
+                                                transformed[i][j] = True
+
+                            elif source['type'] == 'combined_inputs':
+                                # 组合多个输入对象
+                                # 实现对象组合逻辑
+                                pass
+
+        # 5. 应用抽象转换模式
+        for pattern in common_patterns:
+            if isinstance(pattern, dict) and pattern.get('type') == 'position_pattern' and pattern.get('confidence', 0) > 0.5:
+                # 应用位置变化模式
+                delta_row = pattern.get('delta_row', 0)
+                delta_col = pattern.get('delta_col', 0)
+
+                # 对尚未转换的位置应用位置变化
+                height, width = len(input_grid), len(input_grid[0])
+                new_grid = [list(row) for row in output_grid]
+
+                for i in range(height):
+                    for j in range(width):
+                        if not transformed[i][j] and input_grid[i][j] != 0:
+                            new_i = i + delta_row
+                            new_j = j + delta_col
+
+                            # 确保新位置在网格范围内
+                            if 0 <= new_i < height and 0 <= new_j < width:
+                                new_grid[new_i][new_j] = input_grid[i][j]
+                                new_grid[i][j] = 0  # 清除原位置
+
+                # 更新输出网格
+                output_grid = new_grid
+
+            elif isinstance(pattern, dict) and pattern.get('type') == 'color_pattern' and pattern.get('confidence', 0) > 0.5:
+                # 应用颜色变化模式
+                from_color = pattern.get('from_color')
+                to_color = pattern.get('to_color')
+
+                # 对尚未转换的位置应用颜色变化
+                for i in range(len(output_grid)):
+                    for j in range(len(output_grid[0])):
+                        if not transformed[i][j] and input_grid[i][j] == from_color:
+                            output_grid[i][j] = to_color
+
+        if self.debug:
+            self._debug_save_grid(output_grid, "predicted_output_from_rules")
+            self._debug_print("完成规则应用，生成预测输出")
+
+        return output_grid
+
+    def _can_apply_transformation(self, input_obj, modification):
+        """检查是否可以将变换规则应用到输入对象"""
+        # 实现规则匹配逻辑
+        # 如果有对象ID，可以直接比较
+        if 'input_obj_id' in modification and hasattr(input_obj, 'obj_id'):
+            return str(input_obj.obj_id) == str(modification['input_obj_id'])
+
+        # 否则基于对象特征进行匹配
+        # 例如：大小、颜色分布、位置等
+        return True  # 简化版，实际应用中需要更复杂的匹配逻辑
+
+    def _apply_object_transformation(self, input_obj, transformation):
+        """应用变换到输入对象，返回变换后的对象"""
+        transform_type = transformation.get('type', '')
+        result_obj = set()
+
+        if transform_type == 'same_shape_different_position':
+            # 应用位置变化
+            position_change = transformation.get('position_change', {})
+            delta_row = position_change.get('delta_row', 0)
+            delta_col = position_change.get('delta_col', 0)
+
+            for color, (i, j) in input_obj.original_obj:
+                new_i = i + delta_row
+                new_j = j + delta_col
+                result_obj.add((color, (new_i, new_j)))
+
+        elif transform_type in ['rotate', 'flip', 'scale']:
+            # 应用形状变换（简化版）
+            # 在实际应用中，需要实现完整的旋转、翻转和缩放逻辑
+            result_obj = input_obj.original_obj
+
+        elif 'color_transform' in transformation:
+            # 应用颜色变换
+            color_map = transformation.get('color_transform', {}).get('color_mapping', {})
+
+            for color, pos in input_obj.original_obj:
+                new_color = color_map.get(str(color), color)
+                result_obj.add((new_color, pos))
+        else:
+            # 默认不变
+            result_obj = input_obj.original_obj
+
+        return result_obj
+
+    def _generate_object_from_transformation(self, input_obj, transformation):
+        """根据变换生成新对象"""
+        # 类似于_apply_object_transformation，但可能有不同的生成逻辑
+        return self._apply_object_transformation(input_obj, transformation)
+
+    def _match_object_pattern(self, obj, pattern):
+        """检查对象是否匹配特定模式"""
+        # 简化版匹配逻辑
+        if 'input_obj_id' in pattern and hasattr(obj, 'obj_id'):
+            return str(obj.obj_id) == str(pattern['input_obj_id'])
+
+        # 可以添加基于形状、大小、颜色等的匹配
+        return False
+
+    def get_prediction_confidence(self, predicted_output, actual_output):
+        """
+        计算预测与实际输出的匹配程度，返回置信度得分
+
+        Args:
+            predicted_output: 预测的输出网格
+            actual_output: 实际的输出网格
+
+        Returns:
+            匹配置信度 (0-1)
+        """
+        if predicted_output == actual_output:
+            return 1.0  # 完全匹配
+
+        # 计算网格大小
+        if not predicted_output or not actual_output:
+            return 0.0
+
+        height_pred, width_pred = len(predicted_output), len(predicted_output[0])
+        height_act, width_act = len(actual_output), len(actual_output[0])
+
+        # 如果尺寸不同，返回较低的置信度
+        if height_pred != height_act or width_pred != width_act:
+            return 0.1  # 尺寸不匹配，几乎没有信心
+
+        # 计算像素匹配率
+        total_pixels = height_pred * width_pred
+        matching_pixels = 0
+
+        for i in range(height_pred):
+            for j in range(width_pred):
+                if predicted_output[i][j] == actual_output[i][j]:
+                    matching_pixels += 1
+
+        # 基本置信度：匹配像素比例
+        base_confidence = matching_pixels / total_pixels
+
+        # 优化：考虑重要区域的匹配程度
+        # 例如：非背景像素（非0像素）的匹配更重要
+        non_zero_pred = sum(1 for row in predicted_output for pixel in row if pixel != 0)
+        non_zero_act = sum(1 for row in actual_output for pixel in row if pixel != 0)
+
+        # 计算非零像素的匹配
+        non_zero_matching = 0
+        for i in range(height_pred):
+            for j in range(width_pred):
+                if predicted_output[i][j] != 0 and predicted_output[i][j] == actual_output[i][j]:
+                    non_zero_matching += 1
+
+        # 非零像素匹配率（避免除零）
+        if max(non_zero_pred, non_zero_act) > 0:
+            non_zero_confidence = non_zero_matching / max(non_zero_pred, non_zero_act)
+        else:
+            non_zero_confidence = 1.0  # 如果两者都没有非零像素，则认为匹配
+
+        # 加权组合两种置信度，非零区域匹配更重要
+        combined_confidence = 0.3 * base_confidence + 0.7 * non_zero_confidence
+
+        if self.debug:
+            self._debug_print(f"预测置信度: 基本={base_confidence:.4f}, 非零区域={non_zero_confidence:.4f}, 组合={combined_confidence:.4f}")
+
+        return combined_confidence
+
+    def calculate_rule_confidence(self, input_grid, predicted_output):
+        """
+        计算基于规则生成的预测输出的置信度
+
+        Args:
+            input_grid: 输入网格
+            predicted_output: 预测的输出网格
+
+        Returns:
+            规则预测置信度 (0-1)
+        """
+        # 如果没有规则，置信度低
+        if not self.transformation_rules:
+            return 0.2
+
+        # 获取应用规则的数量
+        num_rules_applied = 0
+        total_rule_confidence = 0.0
+
+        # 计算各种规则的应用情况
+        for rule in self.transformation_rules:
+            # 检查规则是否适用于当前输入/输出
+            if self._is_rule_applicable(rule, input_grid, predicted_output):
+                num_rules_applied += 1
+
+                # 计算规则的置信度
+                rule_conf = 0.0
+
+                # 1. 如果规则在训练数据中频繁出现，提高置信度
+                if 'pair_id' in rule:
+                    rule_conf += 0.3  # 基础置信度
+
+                # 2. 考虑对象权重
+                if 'weighted_objects' in rule and rule['weighted_objects']:
+                    avg_weight = sum(obj['weight'] for obj in rule['weighted_objects']) / len(rule['weighted_objects'])
+                    weight_factor = min(1.0, avg_weight / 5.0)  # 规范化到0-1范围
+                    rule_conf += weight_factor * 0.3
+
+                # 3. 考虑模式匹配
+                if 'transformation_patterns' in rule and rule['transformation_patterns']:
+                    patterns = rule['transformation_patterns']
+                    for pattern in patterns:
+                        if pattern.get('confidence', 0) > 0.7:
+                            rule_conf += 0.2
+                            break
+
+                # 累加总置信度
+                total_rule_confidence += rule_conf
+
+        # 如果没有应用规则，返回低置信度
+        if num_rules_applied == 0:
+            return 0.3
+
+        # 计算平均规则置信度，并确保不超过1.0
+        avg_rule_confidence = min(1.0, total_rule_confidence / num_rules_applied)
+
+        if self.debug:
+            self._debug_print(f"规则预测置信度: {avg_rule_confidence:.4f} (应用了 {num_rules_applied} 条规则)")
+
+        return avg_rule_confidence
+
+    def _is_rule_applicable(self, rule, input_grid, predicted_output):
+        """检查规则是否适用于给定的输入/输出对"""
+        # 简化版规则适用性检查
+        # 在实际应用中，可以根据规则的具体内容进行更复杂的检查
+        # 例如检查对象匹配、位置变化、颜色变换等是否符合规则
+
+        # 检查输入网格中是否存在与规则相关的特征
+        if 'object_mappings' in rule and rule['object_mappings']:
+            # 抽取输入网格中的对象
+            height, width = len(input_grid), len(input_grid[0])
+            input_objects = []
+            for param in [(True, True, False), (False, False, False)]:
+                objects = self._extract_objects_with_param(input_grid, param)
+                for obj in objects:
+                    input_objects.append(self._create_obj_info(0, 'test_in', obj, param, height, width))
+
+            # 检查是否有对象匹配规则中的对象
+            for mapping in rule['object_mappings']:
+                if 'diff_in_object' in mapping:
+                    in_obj_info = mapping['diff_in_object']
+                    # 简化检查：只检查是否有类似大小和颜色的对象
+                    for obj in input_objects:
+                        if (hasattr(obj, 'size') and hasattr(obj, 'main_color') and
+                            abs(obj.size - in_obj_info.get('size', 0)) < 3 and
+                            obj.main_color == in_obj_info.get('main_color')):
+                            return True
+
+        # 默认返回True，表示规则适用
+        return True
+
+    def calculate_pattern_confidence(self, input_grid, predicted_output):
+        """
+        计算基于模式生成的预测输出的置信度
+
+        Args:
+            input_grid: 输入网格
+            predicted_output: 预测的输出网格
+
+        Returns:
+            模式预测置信度 (0-1)
+        """
+        # 如果没有模式，置信度低
+        if not self.common_patterns:
+            return 0.2
+
+        # 初始化置信度
+        pattern_confidence = 0.3  # 基础置信度
+
+        # 检查形状变换模式应用情况
+        shape_transformations = self.common_patterns.get('shape_transformations', [])
+        if shape_transformations:
+            # 获取最高置信度的形```
+            # 获取最高置信度的形状变换
+            best_transform = max(shape_transformations, key=lambda x: x.get('confidence', 0))
+            transform_conf = best_transform.get('confidence', 0)
+            # 根据形状变换的置信度调整总置信度
+            pattern_confidence += transform_conf * 0.2
+
+            # 如果形状变换出现多次，增加置信度
+            count = best_transform.get('count', 0)
+            if count > 2:
+                pattern_confidence += min(0.2, count * 0.05)  # 最多增加0.2
+
+        # 检查颜色映射模式应用情况
+        color_mappings = self.common_patterns.get('color_mappings', {}).get('mappings', {})
+        if color_mappings:
+            # 计算颜色映射的平均置信度
+            avg_color_conf = sum(mapping.get('confidence', 0) for mapping in color_mappings.values()) / len(color_mappings)
+            pattern_confidence += avg_color_conf * 0.2
+
+            # 如果有颜色偏移模式，增加置信度
+            color_patterns = self.common_patterns.get('color_mappings', {}).get('patterns', [])
+            if color_patterns and any(p.get('type') == 'color_offset' for p in color_patterns):
+                pattern_confidence += 0.1
+
+        # 检查位置变化模式应用情况
+        position_changes = self.common_patterns.get('position_changes', [])
+        if position_changes:
+            # 获取最高置信度的位置变化
+            best_position = max(position_changes, key=lambda x: x.get('confidence', 0))
+            position_conf = best_position.get('confidence', 0)
+            # 根据位置变化的置信度调整总置信度
+            pattern_confidence += position_conf * 0.2
+
+        # 确保置信度不超过1.0
+        pattern_confidence = min(1.0, pattern_confidence)
+
+        if self.debug:
+            self._debug_print(f"模式预测置信度: {pattern_confidence:.4f}")
+
+        return pattern_confidence
+
+    def _extract_objects_with_param(self, grid, param):
+        """
+        从网格中提取对象，使用指定的参数
+
+        Args:
+            grid: 输入网格
+            param: 参数元组 (univalued, diagonal, without_bg)
+
+        Returns:
+            提取的对象列表
+        """
+        # 获取网格尺寸
+        height, width = len(grid), len(grid[0])
+
+        # 转换网格为元组格式
+        if isinstance(grid, list):
+            grid = tuple(tuple(row) for row in grid)
+
+        # 使用现有函数提取对象
+        return pureobjects_from_grid(param, 0, 'test', grid, [height, width])
+
+    def _create_obj_info(self, pair_id, in_or_out, obj, param, height, width):
+        """
+        创建加权对象信息
+
+        Args:
+            pair_id: 训练对ID
+            in_or_out: 输入/输出类型
+            obj: 对象
+            param: 提取参数
+            height, width: 网格尺寸
+
+        Returns:
+            WeightedObjInfo对象
+        """
+        return WeightedObjInfo(pair_id, in_or_out, obj, obj_params=param, grid_hw=[height, width])
+# ```

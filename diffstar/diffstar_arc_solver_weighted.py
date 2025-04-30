@@ -256,22 +256,119 @@ class WeightedARCSolver:
 
             # 处理测试数据
             test_predictions = []
-            for example in task['test']:
+            test_success_count = 0
+            total_test_count = len(task['test'])
+
+            # 先在训练数据上验证规则的有效性
+            train_validation_results = []
+            train_success_count = 0
+
+            for i, example in enumerate(task['train']):
+                input_grid = example['input']
+                actual_output = example['output']
+
+                # 使用提取的转换规则生成预测输出
+                predicted_output = self.diff_analyzer.apply_transformation_rules(
+                    input_grid,
+                    common_patterns,
+                    transformation_rules=self.diff_analyzer.transformation_rules
+                )
+
+                # 检查预测是否与实际输出匹配
+                is_correct = predicted_output == actual_output
+                if is_correct:
+                    train_success_count += 1
+
+                train_validation_results.append({
+                    'pair_id': i,
+                    'is_correct': is_correct,
+                    'confidence': self.diff_analyzer.get_prediction_confidence(predicted_output, actual_output)
+                })
+
+            # 记录训练数据验证的成功率
+            train_success_rate = train_success_count / len(task['train']) if task['train'] else 0
+
+            # 现在处理测试数据
+            for i, example in enumerate(task['test']):
                 input_grid = example['input']
 
-                # 应用共有模式进行预测
-                predicted_output = self.diff_analyzer.apply_common_patterns(input_grid,param)
+                # 1. 使用权重分析模式进行预测
+                weight_based_prediction = self.diff_analyzer.apply_common_patterns(input_grid, param)
 
-                test_predictions.append({
-                    'input': example['input'],
-                    'predicted_output': predicted_output
-                })
+                # 2. 使用转换规则进行预测
+                transform_based_prediction = self.diff_analyzer.apply_transformation_rules(
+                    input_grid,
+                    common_patterns,
+                    transformation_rules=self.diff_analyzer.transformation_rules
+                )
+
+                # 3. 确定最终预测结果（优先使用训练验证成功率更高的方法）
+                final_prediction = None
+                prediction_method = ""
+                prediction_confidence = 0.0
+
+                if train_success_rate > 0.5:  # 如果转换规则在训练数据上的成功率超过50%
+                    final_prediction = transform_based_prediction
+                    prediction_method = "transformation_rules"
+                    # 计算预测置信度
+                    prediction_confidence = self.diff_analyzer.calculate_rule_confidence(
+                        input_grid, transform_based_prediction
+                    )
+                else:
+                    final_prediction = weight_based_prediction
+                    prediction_method = "weight_patterns"
+                    # 计算预测置信度
+                    prediction_confidence = self.diff_analyzer.calculate_pattern_confidence(
+                        input_grid, weight_based_prediction
+                    )
+
+                # 如果有解决方案，检查预测是否正确
+                if 'solution' in task_data and task_data['solution']:
+                    actual_output = task_data['solution'][i]
+                    is_correct = final_prediction == actual_output
+                    if is_correct:
+                        test_success_count += 1
+
+                    test_predictions.append({
+                        'test_id': i,
+                        'input': input_grid,
+                        'predicted_output': final_prediction,
+                        'actual_output': actual_output,
+                        'is_correct': is_correct,
+                        'prediction_method': prediction_method,
+                        'confidence': prediction_confidence,
+                        'weight_based_prediction': weight_based_prediction,
+                        'transform_based_prediction': transform_based_prediction
+                    })
+                else:
+                    # 没有解决方案，只返回预测
+                    test_predictions.append({
+                        'test_id': i,
+                        'input': input_grid,
+                        'predicted_output': final_prediction,
+                        'prediction_method': prediction_method,
+                        'confidence': prediction_confidence,
+                        'weight_based_prediction': weight_based_prediction,
+                        'transform_based_prediction': transform_based_prediction
+                    })
 
             return {
                 'task_id': task_id,
                 'common_patterns': common_patterns,
                 'mapping_rules': self.diff_analyzer.mapping_rules,
+                'transformation_rules': self.diff_analyzer.transformation_rules,
                 'test_predictions': test_predictions,
+                'train_validation': {
+                    'success_count': train_success_count,
+                    'total_count': len(task['train']),
+                    'success_rate': train_success_rate,
+                    'detailed_results': train_validation_results
+                },
+                'test_evaluation': {
+                    'success_count': test_success_count,
+                    'total_count': total_test_count,
+                    'success_rate': test_success_count / total_test_count if total_test_count > 0 else 0
+                },
                 'weighted_info': {
                     'pixel_threshold_pct': self.diff_analyzer.pixel_threshold_pct,
                     'weight_increment': self.diff_analyzer.weight_increment,
