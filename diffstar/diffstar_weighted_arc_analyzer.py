@@ -86,6 +86,7 @@ class WeightedARCDiffAnalyzer(ARCDiffAnalyzer):
 
         # 保存颜色映射统计
         self.color_statistics = {}
+        self.transformation_rules = []
 
         # 重写对象存储结构，使用WeightedObjInfo替代ObjInfo
         self.all_objects = {
@@ -531,6 +532,7 @@ class WeightedARCDiffAnalyzer(ARCDiffAnalyzer):
 
         # 将转换规则合并到映射规则中
         mapping_rule["input_to_output_transformation"] = transformation_rule
+        self.transformation_rules.append(transformation_rule)
 
         return mapping_rule
 
@@ -1403,7 +1405,7 @@ class WeightedARCDiffAnalyzer(ARCDiffAnalyzer):
             预测的输出网格
         """
         if self.debug:
-            self._debug_print(f"开始应用转换规则生成预测输出")
+            self._debug_print(f"\n\n开始应用转换规则生成预测输出")
 
         # 如果没有提供转换规则，使用当前的规则
         if transformation_rules is None:
@@ -1431,8 +1433,8 @@ class WeightedARCDiffAnalyzer(ARCDiffAnalyzer):
                 obj_info = self._create_obj_info(0, 'test_in', obj, param, height, width)
                 input_obj_infos.append(obj_info)
 
-        # 2. 计算输入对象的权重
-        weight_grid = self._calculate_object_weights(input_grid, input_obj_infos)
+        # 2. 计算输入对象的权重 - 使用正确的测试对象权重计算方法
+        self._calculate_test_object_weights(input_grid, input_obj_infos)
 
         # 3. 按权重对对象排序（权重高的优先处理）
         input_obj_infos.sort(key=lambda x: x.obj_weight if hasattr(x, 'obj_weight') else 0, reverse=True)
@@ -1775,10 +1777,10 @@ class WeightedARCDiffAnalyzer(ARCDiffAnalyzer):
         # 初始化置信度
         pattern_confidence = 0.3  # 基础置信度
 
-        # 检查形状变换模式应用情况
+                # 检查形状变换模式应用情况
         shape_transformations = self.common_patterns.get('shape_transformations', [])
         if shape_transformations:
-            # 获取最高置信度的形```
+            # 获取    最高置信    度的形```
             # 获取最高置信度的形状变换
             best_transform = max(shape_transformations, key=lambda x: x.get('confidence', 0))
             transform_conf = best_transform.get('confidence', 0)

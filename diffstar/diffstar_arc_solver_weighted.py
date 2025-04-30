@@ -262,7 +262,7 @@ class WeightedARCSolver:
             # 先在训练数据上验证规则的有效性
             train_validation_results = []
             train_success_count = 0
-
+            print(f"\n\n\n\n\n\n处理训练数据验证")
             for i, example in enumerate(task['train']):
                 input_grid = example['input']
                 actual_output = example['output']
@@ -289,8 +289,19 @@ class WeightedARCSolver:
             train_success_rate = train_success_count / len(task['train']) if task['train'] else 0
 
             # 现在处理测试数据
+            if self.debug:
+                print(f"\n\n\n\n\n===== 处理测试数据 =====")
+                print(f"训练验证成功率: {train_success_rate:.2f}")
+                print(f"测试样例数量: {total_test_count}")
+
             for i, example in enumerate(task['test']):
+                if self.debug:
+                    print(f"\n----- 测试样例 {i+1}/{total_test_count} -----")
+
                 input_grid = example['input']
+
+                if self.debug:
+                    print(f"输入网格尺寸: {len(input_grid)}x{len(input_grid[0])}")
 
                 # 1. 使用权重分析模式进行预测
                 weight_based_prediction = self.diff_analyzer.apply_common_patterns(input_grid, param)
@@ -301,6 +312,10 @@ class WeightedARCSolver:
                     common_patterns,
                     transformation_rules=self.diff_analyzer.transformation_rules
                 )
+
+                if self.debug:
+                    print(f"权重模式预测网格尺寸: {len(weight_based_prediction)}x{len(weight_based_prediction[0]) if weight_based_prediction else 0}")
+                    print(f"转换规则预测网格尺寸: {len(transform_based_prediction)}x{len(transform_based_prediction[0]) if transform_based_prediction else 0}")
 
                 # 3. 确定最终预测结果（优先使用训练验证成功率更高的方法）
                 final_prediction = None
@@ -314,6 +329,8 @@ class WeightedARCSolver:
                     prediction_confidence = self.diff_analyzer.calculate_rule_confidence(
                         input_grid, transform_based_prediction
                     )
+                    if self.debug:
+                        print(f"使用方法: 转换规则 (训练成功率 > 0.5)")
                 else:
                     final_prediction = weight_based_prediction
                     prediction_method = "weight_patterns"
@@ -321,6 +338,12 @@ class WeightedARCSolver:
                     prediction_confidence = self.diff_analyzer.calculate_pattern_confidence(
                         input_grid, weight_based_prediction
                     )
+                    if self.debug:
+                        print(f"使用方法: 权重模式 (训练成功率 <= 0.5)")
+
+                if self.debug:
+                    print(f"预测方法: {prediction_method}")
+                    print(f"预测置信度: {prediction_confidence:.4f}")
 
                 # 如果有解决方案，检查预测是否正确
                 if 'solution' in task_data and task_data['solution']:
@@ -328,6 +351,11 @@ class WeightedARCSolver:
                     is_correct = final_prediction == actual_output
                     if is_correct:
                         test_success_count += 1
+                        if self.debug:
+                            print(f"预测结果: 正确 ✓")
+                    else:
+                        if self.debug:
+                            print(f"预测结果: 错误 ✗")
 
                     test_predictions.append({
                         'test_id': i,
@@ -342,6 +370,9 @@ class WeightedARCSolver:
                     })
                 else:
                     # 没有解决方案，只返回预测
+                    if self.debug:
+                        print(f"预测结果: 未知（无参考解决方案）")
+
                     test_predictions.append({
                         'test_id': i,
                         'input': input_grid,
@@ -351,6 +382,22 @@ class WeightedARCSolver:
                         'weight_based_prediction': weight_based_prediction,
                         'transform_based_prediction': transform_based_prediction
                     })
+
+            # 输出总体测试结果
+            if self.debug:
+                if total_test_count > 0 and 'solution' in task_data and task_data['solution']:
+                    success_rate = test_success_count / total_test_count
+                    print(f"\n===== 测试结果汇总 =====")
+                    print(f"任务ID: {task_id}")
+                    print(f"总测试样例: {total_test_count}")
+                    print(f"正确预测: {test_success_count}")
+                    print(f"正确率: {success_rate:.2f} ({test_success_count}/{total_test_count})")
+                    print(f"使用参数: {param}")
+                else:
+                    print(f"\n===== 预测完成 =====")
+                    print(f"任务ID: {task_id}")
+                    print(f"总测试样例: {total_test_count}")
+                    print(f"使用参数: {param}")
 
             return {
                 'task_id': task_id,
