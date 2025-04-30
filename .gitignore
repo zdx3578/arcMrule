@@ -2,9 +2,18 @@
 __pycache__/
 *.py[cod]
 *$py.class
+diffstar/debug_output
+diffstar/results.json
+diffaweight/
+
 .DS_Store
-*/.DS_Store
-*/*/.DS_Store
+**/.DS_Store
+
+
+
+
+
+
 
 # C extensions
 *.so

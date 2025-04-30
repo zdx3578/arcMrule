@@ -33,7 +33,8 @@ for p in sys.path:
     print(p)
 
 
-from arc_solver import ARCSolver
+# from arc_solver import ARCSolver
+from diffstar_arc_solver_weighted import WeightedARCSolver
 
 
 
@@ -57,7 +58,7 @@ def main():
     args = parser.parse_args()
 
     # 初始化解决器
-    solver = ARCSolver(data_dir=args.data_dir, debug=args.debug)
+    solver = WeightedARCSolver(data_dir=args.data_dir, debug=args.debug)
 
     # 处理单个任务或所有任务
     if args.process_all:

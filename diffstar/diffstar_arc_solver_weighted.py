@@ -1,27 +1,38 @@
 import json
 import os
 from typing import Dict, Any, List, Optional
-from arc_diff_analyzer import ARCDiffAnalyzer
-
 import sys
 import logging
 import traceback
 import cgitb
+
+# 导入增强型差异分析器
+from diffstar_weighted_arc_analyzer import WeightedARCDiffAnalyzer
+
+# 启用CGI追踪以便更好的错误报告
 cgitb.enable(format='text')
 
+class WeightedARCSolver:
+    """ARC问题解决器，使用带权重的差异网格分析"""
 
-class ARCSolver:
-    """ARC问题解决器，使用差异网格分析"""
-
-    def __init__(self, data_dir=None, debug=False):
+    def __init__(self, data_dir=None, debug=True, pixel_threshold_pct=60):
         """
-        初始化ARC解决器
+        初始化增强型ARC解决器
 
         Args:
             data_dir: ARC数据集目录，如果提供则自动加载整个数据集
             debug: 是否开启调试模式
+            pixel_threshold_pct: 颜色占比阈值（百分比），超过此阈值的颜色视为背景
         """
-        self.diff_analyzer = ARCDiffAnalyzer()
+        # 创建加权差异分析器
+        self.diff_analyzer = WeightedARCDiffAnalyzer(
+            debug=debug,
+            debug_dir="weighted_debug_output",
+            pixel_threshold_pct=pixel_threshold_pct,  # 背景颜色阈值
+            weight_increment=2,      # 对象权重增量
+            diff_weight_increment=5  # 差异区域权重增量
+        )
+
         self.debug = debug
 
         # 初始化数据字典
@@ -173,7 +184,7 @@ class ARCSolver:
 
     def process_task(self, task_data: Dict[str, Any]) -> Dict[str, Any]:
         """
-        处理ARC任务数据
+        处理ARC任务数据，使用加权分析器
 
         Args:
             task_data: 任务数据
@@ -189,7 +200,14 @@ class ARCSolver:
             print(f"\n\n\n\n\n\n处理 task 任务 {task_id}")
 
         # 重置差异分析器
-        self.diff_analyzer = ARCDiffAnalyzer()
+        self.diff_analyzer = WeightedARCDiffAnalyzer(
+            debug=self.debug,
+            debug_dir=f"weighted_debug_output/{task_id}"
+        )
+
+        # 创建输出目录
+        if self.debug:
+            os.makedirs(f"weighted_debug_output/{task_id}", exist_ok=True)
 
         # 处理训练数据
         for i, example in enumerate(task['train']):
@@ -200,8 +218,8 @@ class ARCSolver:
             # 添加到差异分析器
             self.diff_analyzer.add_train_pair(i, input_grid, output_grid)
 
-        # 分析共有模式
-        common_patterns = self.diff_analyzer.analyze_common_patterns()
+        # 分析共有模式（使用带权重的版本）
+        common_patterns = self.diff_analyzer.analyze_common_patterns_with_weights()
 
         # 处理测试数据
         test_predictions = []
@@ -220,7 +238,13 @@ class ARCSolver:
             'task_id': task_id,
             'common_patterns': common_patterns,
             'mapping_rules': self.diff_analyzer.mapping_rules,
-            'test_predictions': test_predictions
+            'test_predictions': test_predictions,
+            'weighted_info': {
+                'pixel_threshold_pct': self.diff_analyzer.pixel_threshold_pct,
+                'weight_increment': self.diff_analyzer.weight_increment,
+                'diff_weight_increment': self.diff_analyzer.diff_weight_increment,
+                'color_statistics': self.diff_analyzer.color_statistics
+            }
         }
 
     def process_all_tasks(self, task_type='train', limit=None):

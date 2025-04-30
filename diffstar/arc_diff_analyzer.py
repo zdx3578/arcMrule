@@ -63,6 +63,7 @@ class ObjInfo:
         # 计算标准化对象
         self.obj_00 = self._shift_to_origin(obj)  # 移到左上角但保留颜色
         self.obj_000 = self._shift_to_origin(obj, preserve_colors=False)  # 完全标准化（去色）
+        self.obj_weight = 0
 
         # 计算边界框
         self.bounding_box = (
