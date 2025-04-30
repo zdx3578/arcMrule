@@ -522,6 +522,16 @@ class WeightedARCDiffAnalyzer(ARCDiffAnalyzer):
                 "weight_out": out_obj.obj_weight
             })
 
+        transformation_rule = self._analyze_input_to_output_transformation(
+            pair_id, input_grid, output_grid,
+            input_obj_infos, output_obj_infos,
+            diff_in_obj_infos, diff_out_obj_infos,
+            mapping_rule
+        )
+
+        # 将转换规则合并到映射规则中
+        mapping_rule["input_to_output_transformation"] = transformation_rule
+
         return mapping_rule
 
     def _find_object_mappings_by_shape_and_weight(self, diff_in_obj_infos, diff_out_obj_infos):
@@ -995,3 +1005,387 @@ class WeightedARCDiffAnalyzer(ARCDiffAnalyzer):
             self._debug_print(f"  对象 {info['obj_id']}: 权重={info['weight']}, 大小={info['size']}, 颜色={info['main_color']}")
         if len(weight_info) > 5:
             self._debug_print(f"  ... 还有 {len(weight_info) - 5} 个对象")
+
+
+    def _analyze_input_to_output_transformation(self, pair_id, input_grid, output_grid,
+                                            input_obj_infos, output_obj_infos,
+                                            diff_in_obj_infos, diff_out_obj_infos,
+                                            diff_mapping):
+        """
+        分析从输入到输出的转换规则，找出如何生成输出网格
+
+        Args:
+            pair_id: 训练对ID
+            input_grid, output_grid: 输入输出网格
+            input_obj_infos, output_obj_infos: 输入输出对象信息
+            diff_in_obj_infos, diff_out_obj_infos: 差异对象信息
+            diff_mapping: 已识别的差异映射规则
+
+        Returns:
+            转换规则字典
+        """
+        if self.debug:
+            self._debug_print(f"分析输入到输出的转换规则，pair_id={pair_id}")
+
+        # 初始化转换规则
+        transformation_rule = {
+            "pair_id": pair_id,
+            "preserved_objects": [],  # 保留的对象
+            "modified_objects": [],   # 修改的对象
+            "removed_objects": [],    # 移除的对象
+            "added_objects": [],      # 新增的对象
+            "transformation_patterns": [], # 抽象转换模式
+            "object_operations": []   # 对象操作序列
+        }
+
+        # 为快速查找创建对象映射
+        input_obj_by_id = {obj.obj_id: obj for obj in input_obj_infos}
+        output_obj_by_id = {obj.obj_id: obj for obj in output_obj_infos}
+
+        # 创建标准化形状到对象的映射，用于形状匹配
+        input_by_shape = {}
+        for obj in input_obj_infos:
+            shape_key = self._get_hashable_representation(obj.obj_000)
+            if shape_key not in input_by_shape:
+                input_by_shape[shape_key] = []
+            input_by_shape[shape_key].append(obj)
+
+        output_by_shape = {}
+        for obj in output_obj_infos:
+            shape_key = self._get_hashable_representation(obj.obj_000)
+            if shape_key not in output_by_shape:
+                output_by_shape[shape_key] = []
+            output_by_shape[shape_key].append(obj)
+
+        # 1. 分析保留的对象 - 形状和位置都相同
+        for in_obj in input_obj_infos:
+            for out_obj in output_obj_infos:
+                if (self._get_hashable_representation(in_obj.original_obj) ==
+                    self._get_hashable_representation(out_obj.original_obj)):
+                    transformation_rule["preserved_objects"].append({
+                        "input_obj_id": in_obj.obj_id,
+                        "output_obj_id": out_obj.obj_id,
+                        "weight": in_obj.obj_weight,
+                        "object": in_obj.to_dict()
+                    })
+                    # 标记此对象已处理
+                    input_obj_by_id.pop(in_obj.obj_id, None)
+                    output_obj_by_id.pop(out_obj.obj_id, None)
+
+        # 2. 分析修改的对象 - 基于形状匹配或位置关系
+        for in_obj in list(input_obj_by_id.values()):
+            best_match = None
+            best_transformation = None
+            best_score = -1
+
+            in_shape = self._get_hashable_representation(in_obj.obj_000)
+
+            for out_obj in list(output_obj_by_id.values()):
+                out_shape = self._get_hashable_representation(out_obj.obj_000)
+
+                # 检查形状匹配
+                if in_shape == out_shape:
+                    # 相同形状，可能是位置变化
+                    position_change = in_obj.get_positional_change(out_obj)
+                    color_transform = in_obj.get_color_transformation(out_obj)
+
+                    # 计算匹配得分
+                    score = (in_obj.obj_weight * out_obj.obj_weight) * 0.8
+                    if position_change["delta_row"] == 0 and position_change["delta_col"] == 0:
+                        score += 0.5  # 位置相同加分
+
+                    if score > best_score:
+                        best_score = score
+                        best_match = out_obj
+                        best_transformation = {
+                            "type": "same_shape_different_position",
+                            "position_change": position_change,
+                            "color_transform": color_transform
+                        }
+                else:
+                    # 形状不同，检查是否有变换关系
+                    matches, transform_type, transform_name = in_obj.matches_with_transformation(out_obj)
+                    if matches:
+                        # 计算得分
+                        score = (in_obj.obj_weight * out_obj.obj_weight) * 0.6
+
+                        if score > best_score:
+                            best_score = score
+                            best_match = out_obj
+                            best_transformation = {
+                                "type": transform_type,
+                                "name": transform_name,
+                                "position_change": in_obj.get_positional_change(out_obj),
+                                "color_transform": in_obj.get_color_transformation(out_obj)
+                            }
+
+            if best_match and best_score > 0:
+                transformation_rule["modified_objects"].append({
+                    "input_obj_id": in_obj.obj_id,
+                    "output_obj_id": best_match.obj_id,
+                    "transformation": best_transformation,
+                    "confidence": best_score / (in_obj.obj_weight * best_match.obj_weight + 0.01),
+                    "weight_product": in_obj.obj_weight * best_match.obj_weight
+                })
+
+                # 标记已处理
+                input_obj_by_id.pop(in_obj.obj_id, None)
+                output_obj_by_id.pop(best_match.obj_id, None)
+
+                # 记录转换操作
+                transformation_rule["object_operations"].append({
+                    "operation": "transform",
+                    "input_obj_id": in_obj.obj_id,
+                    "output_obj_id": best_match.obj_id,
+                    "details": best_transformation
+                })
+
+        # 3. 分析移除的对象 - 输入中有但输出中没有的
+        for in_obj in input_obj_by_id.values():
+            transformation_rule["removed_objects"].append({
+                "input_obj_id": in_obj.obj_id,
+                "weight": in_obj.obj_weight,
+                "object": in_obj.to_dict()
+            })
+
+            # 记录删除操作
+            transformation_rule["object_operations"].append({
+                "operation": "remove",
+                "input_obj_id": in_obj.obj_id,
+                "details": {"reason": "no_match_in_output"}
+            })
+
+        # 4. 分析新增的对象 - 输出中有但输入中没有的
+        for out_obj in output_obj_by_id.values():
+            # 检查是否可以从某些输入对象组合生成
+            generated_from = self._check_if_generated_from_inputs(out_obj, input_obj_infos, diff_in_obj_infos)
+
+            transformation_rule["added_objects"].append({
+                "output_obj_id": out_obj.obj_id,
+                "weight": out_obj.obj_weight,
+                "object": out_obj.to_dict(),
+                "generated_from": generated_from
+            })
+
+            # 记录添加操作
+            transformation_rule["object_operations"].append({
+                "operation": "add",
+                "output_obj_id": out_obj.obj_id,
+                "details": {
+                    "generated_from": generated_from
+                }
+            })
+
+        # 5. 提取抽象转换模式
+        transformation_patterns = self._extract_transformation_patterns(
+            transformation_rule["preserved_objects"],
+            transformation_rule["modified_objects"],
+            transformation_rule["removed_objects"],
+            transformation_rule["added_objects"]
+        )
+
+        transformation_rule["transformation_patterns"] = transformation_patterns
+
+        if self.debug:
+            self._debug_print(f"找到 {len(transformation_rule['preserved_objects'])} 个保留的对象")
+            self._debug_print(f"找到 {len(transformation_rule['modified_objects'])} 个修改的对象")
+            self._debug_print(f"找到 {len(transformation_rule['removed_objects'])} 个移除的对象")
+            self._debug_print(f"找到 {len(transformation_rule['added_objects'])} 个新增的对象")
+            self._debug_print(f"提取了 {len(transformation_patterns)} 个抽象转换模式")
+            self._debug_save_json(transformation_rule, f"transformation_rule_{pair_id}")
+
+        return transformation_rule
+
+    def _check_if_generated_from_inputs(self, output_obj, input_objs, diff_input_objs):
+        """检查输出对象是否可能由输入对象生成"""
+        possible_sources = []
+
+        # 分析可能的来源：
+        # 1. 可能是输入对象的复制、移动或变换
+        for input_obj in input_objs:
+            matches, transform_type, transform_name = input_obj.matches_with_transformation(output_obj)
+            if matches:
+                possible_sources.append({
+                    "type": "transformed_input",
+                    "input_obj_id": input_obj.obj_id,
+                    "transformation": {
+                        "type": transform_type,
+                        "name": transform_name
+                    },
+                    "confidence": 0.7,
+                    "weight_product": input_obj.obj_weight * output_obj.obj_weight
+                })
+
+        # 2. 可能是多个输入对象的组合
+        if len(input_objs) >= 2:
+            for i, obj1 in enumerate(input_objs):
+                for obj2 in input_objs[i+1:]:
+                    # 检查是否是两个对象的合并
+                    combined = self._check_if_combined(output_obj, obj1, obj2)
+                    if combined:
+                        possible_sources.append({
+                            "type": "combined_inputs",
+                            "input_obj_ids": [obj1.obj_id, obj2.obj_id],
+                            "combination_type": combined["type"],
+                            "confidence": combined["confidence"],
+                            "weight_product": obj1.obj_weight * obj2.obj_weight * output_obj.obj_weight
+                        })
+
+        # 3. 可能是输入对象的填充、描边等操作
+        for input_obj in input_objs:
+            operation = self._check_common_operations(output_obj, input_obj)
+            if operation:
+                possible_sources.append({
+                    "type": "operation_on_input",
+                    "input_obj_id": input_obj.obj_id,
+                    "operation": operation["type"],
+                    "confidence": operation["confidence"],
+                    "weight_product": input_obj.obj_weight * output_obj.obj_weight
+                })
+
+        # 按置信度排序
+        possible_sources.sort(key=lambda x: (x.get("weight_product", 0), x.get("confidence", 0)), reverse=True)
+
+        return possible_sources
+
+    def _check_if_combined(self, output_obj, input_obj1, input_obj2):
+        """检查输出对象是否是两个输入对象的组合"""
+        # 提取像素坐标集
+        out_pixels = {loc for _, loc in output_obj.original_obj}
+        in1_pixels = {loc for _, loc in input_obj1.original_obj}
+        in2_pixels = {loc for _, loc in input_obj2.original_obj}
+
+        # 计算像素重叠
+        union_pixels = in1_pixels.union(in2_pixels)
+        overlap_with_output = out_pixels.intersection(union_pixels)
+
+        # 如果合并的输入像素大部分存在于输出中，可能是组合
+        if len(overlap_with_output) > 0.8 * len(union_pixels):
+            return {
+                "type": "spatial_union",
+                "confidence": len(overlap_with_output) / len(union_pixels)
+            }
+
+        return None
+
+    def _check_common_operations(self, output_obj, input_obj):
+        """检查常见操作如填充、描边等"""
+        # 提取像素集
+        out_pixels = {loc for _, loc in output_obj.original_obj}
+        in_pixels = {loc for _, loc in input_obj.original_obj}
+
+        # 检查填充
+        if out_pixels.issuperset(in_pixels) and len(out_pixels) > len(in_pixels):
+            # 如果输出包含所有输入像素且更大，可能是填充
+            return {
+                "type": "fill",
+                "confidence": len(in_pixels) / len(out_pixels)
+            }
+
+        # 检查描边 - 简化版，只检查输出是否围绕输入
+        if not out_pixels.intersection(in_pixels) and self._is_surrounding(out_pixels, in_pixels):
+            return {
+                "type": "outline",
+                "confidence": 0.8
+            }
+
+        return None
+
+    def _is_surrounding(self, outline_pixels, inner_pixels):
+        """检查一组像素是否围绕另一组像素"""
+        # 简化实现，检查是否存在相邻关系
+        for i, j in inner_pixels:
+            neighbors = [(i-1, j), (i+1, j), (i, j-1), (i, j+1)]
+            for ni, nj in neighbors:
+                if (ni, nj) in outline_pixels:
+                    return True
+        return False
+
+    def _extract_transformation_patterns(self, preserved, modified, removed, added):
+        """提取抽象转换模式"""
+        patterns = []
+
+        # 分析是否有一致的移动模式
+        position_changes = []
+        for obj in modified:
+            if "transformation" in obj and "position_change" in obj["transformation"]:
+                change = obj["transformation"]["position_change"]
+                position_changes.append((change["delta_row"], change["delta_col"], obj["weight_product"]))
+
+        if position_changes:
+            # 按位置变化分组
+            changes_by_delta = {}
+            for dr, dc, weight in position_changes:
+                key = (dr, dc)
+                if key not in changes_by_delta:
+                    changes_by_delta[key] = []
+                changes_by_delta[key].append(weight)
+
+            # 找出最常见的位置变化
+            if changes_by_delta:
+                best_delta, weights = max(changes_by_delta.items(), key=lambda x: sum(x[1]))
+                dr, dc = best_delta
+                avg_weight = sum(weights) / len(weights)
+
+                patterns.append({
+                    "type": "position_pattern",
+                    "delta_row": dr,
+                    "delta_col": dc,
+                    "count": len(weights),
+                    "avg_weight": avg_weight,
+                    "confidence": len(weights) / max(1, len(modified))
+                })
+
+        # 分析是否有一致的颜色变换模式
+        color_transformations = []
+        for obj in modified:
+            if "transformation" in obj and "color_transform" in obj["transformation"]:
+                color_trans = obj["transformation"]["color_transform"]
+                if "color_mapping" in color_trans:
+                    for from_color, to_color in color_trans["color_mapping"].items():
+                        color_transformations.append((from_color, to_color, obj["weight_product"]))
+
+        if color_transformations:
+            # 按颜色变化分组
+            changes_by_color = {}
+            for from_color, to_color, weight in color_transformations:
+                key = (from_color, to_color)
+                if key not in changes_by_color:
+                    changes_by_color[key] = []
+                changes_by_color[key].append(weight)
+
+            # 找出最常见的颜色变化
+            if changes_by_color:
+                best_color_change, weights = max(changes_by_color.items(), key=lambda x: sum(x[1]))
+                from_color, to_color = best_color_change
+                avg_weight = sum(weights) / len(weights)
+
+                patterns.append({
+                    "type": "color_pattern",
+                    "from_color": from_color,
+                    "to_color": to_color,
+                    "count": len(weights),
+                    "avg_weight": avg_weight,
+                    "confidence": len(weights) / max(1, len(modified))
+                })
+
+        # 分析是否有添加/删除对象的模式
+        if added:
+            # 分析新增对象的模式
+            patterns.append({
+                "type": "addition_pattern",
+                "count": len(added),
+                "avg_weight": sum(obj["weight"] for obj in added) / len(added),
+                "description": "可能添加了新对象"
+            })
+
+        if removed:
+            # 分析移除对象的模式
+            patterns.append({
+                "type": "removal_pattern",
+                "count": len(removed),
+                "avg_weight": sum(obj["weight"] for obj in removed) / len(removed),
+                "description": "可能移除了某些对象"
+            })
+
+        return patterns
