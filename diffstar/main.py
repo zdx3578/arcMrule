@@ -14,8 +14,8 @@ possible_pypaths = [
     '/Users/zhangdexiang/github/VSAHDC/arcv2/bateson',
     '/home/zdx/github/VSAHDC/arcv2',
     '/home/zdx/github/VSAHDC/arcv2/forpopper2',
-    '/home/zdx/github/VSAHDC/arcv2/bateson',
-
+    '/home/zdx/github/VSAHDC',
+    '/home/zdx/github/VSAHDC/arcMrule',
     '/another/path/to/check'
 ]
 

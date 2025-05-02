@@ -7,7 +7,9 @@ import traceback
 import cgitb
 
 # 导入增强型差异分析器
-from diffstar_weighted_arc_analyzer import WeightedARCDiffAnalyzer
+# from diffstar_weighted_arc_analyzer import WeightedARCDiffAnalyzer
+# from weighted_analyzer import WeightedARCDiffAnalyzer
+from arcMrule.diffstar.weighted_analyzer import WeightedARCDiffAnalyzer
 
 # 启用CGI追踪以便更好的错误报告
 cgitb.enable(format='text')
