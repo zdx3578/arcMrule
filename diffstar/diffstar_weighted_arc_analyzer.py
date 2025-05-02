@@ -441,7 +441,8 @@ class WeightedARCDiffAnalyzer(ARCDiffAnalyzer):
             "color_mappings": {},
             "position_changes": [],
             "part_whole_relationships": [],
-            "weighted_objects": []  # 添加权重信息
+            "weighted_objects": [],  # 添加权重信息
+            "combined_transformations": []  # 新增：捕获多维度变换的组合规则
         }
 
         # 准备分析diff对象间的映射
@@ -522,6 +523,25 @@ class WeightedARCDiffAnalyzer(ARCDiffAnalyzer):
                 "weight_in": in_obj.obj_weight,
                 "weight_out": out_obj.obj_weight
             })
+
+            # 创建组合变换记录
+            combined_transform = {
+                "in_obj_id": in_obj.obj_id,
+                "out_obj_id": out_obj.obj_id,
+                "shape_transform": {
+                    "transform_type": match_info["transform_type"],
+                    "transform_name": match_info["transform_name"],
+                },
+                "position_change": position_change,
+                "color_change": color_transformation.get("color_mapping", {}),
+                "weight_score": in_obj.obj_weight * out_obj.obj_weight,
+                "confidence": match_info["confidence"],
+                # 记录对象的原始上下文信息
+                "original_context": self._capture_object_context(in_obj, input_grid),
+                "transformed_context": self._capture_object_context(out_obj, output_grid)
+            }
+
+            mapping_rule["combined_transformations"].append(combined_transform)
 
         transformation_rule = self._analyze_input_to_output_transformation(
             pair_id, input_grid, output_grid,
@@ -1008,7 +1028,6 @@ class WeightedARCDiffAnalyzer(ARCDiffAnalyzer):
         if len(weight_info) > 5:
             self._debug_print(f"  ... 还有 {len(weight_info) - 5} 个对象")
 
-
     def _analyze_input_to_output_transformation(self, pair_id, input_grid, output_grid,
                                             input_obj_infos, output_obj_infos,
                                             diff_in_obj_infos, diff_out_obj_infos,
@@ -1160,7 +1179,7 @@ class WeightedARCDiffAnalyzer(ARCDiffAnalyzer):
         # 4. 分析新增的对象 - 输出中有但输入中没有的
         for out_obj in output_obj_by_id.values():
             # 检查是否可以从某些输入对象组合生成
-            generated_from = self._check_if_generated_from_inputs(out_obj, input_obj_infos, diff_in_obj_infos)
+            generated_from = self._check_if_generated_from(out_obj, input_obj_infos, diff_in_obj_infos)
 
             transformation_rule["added_objects"].append({
                 "output_obj_id": out_obj.obj_id,
@@ -1198,7 +1217,7 @@ class WeightedARCDiffAnalyzer(ARCDiffAnalyzer):
 
         return transformation_rule
 
-    def _check_if_generated_from_inputs(self, output_obj, input_objs, diff_input_objs):
+    def _check_if_generated_from(self, output_obj, input_objs, diff_input_objs):
         """检查输出对象是否可能由输入对象生成"""
         possible_sources = []
 
@@ -1757,104 +1776,221 @@ class WeightedARCDiffAnalyzer(ARCDiffAnalyzer):
                             return True
 
         # 默认返回True，表示规则适用
-        return True
+        return True  # 简化版，实际应用中需要更复杂的匹配逻辑
 
-    def calculate_pattern_confidence(self, input_grid, predicted_output):
-        """
-        计算基于模式生成的预测输出的置信度
+    def _learn_dynamic_rules(self, patterns):
+        """从模式中学习动态规则"""
+        rules = []
 
-        Args:
-            input_grid: 输入网格
-            predicted_output: 预测的输出网格
+        for pattern in patterns:
+            # 分析模式中的一致性和变化性
+            consistencies = self._find_consistencies(pattern)
+            variations = self._find_variations(pattern)
 
-        Returns:
-            模式预测置信度 (0-1)
-        """
-        # 如果没有模式，置信度低
-        if not self.common_patterns:
-            return 0.2
+            # 创建动态规则
+            rule = {
+                "conditions": self._extract_conditions(consistencies),
+                "transformations": self._extract_transformations(consistencies, variations),
+                "confidence": pattern.get("confidence", 0),
+                "priority": self._calculate_rule_priority(pattern)
+            }
+            rules.append(rule)
 
-        # 初始化置信度
-        pattern_confidence = 0.3  # 基础置信度
+        return rules
 
-                # 检查形状变换模式应用情况
-        shape_transformations = self.common_patterns.get('shape_transformations', [])
-        if shape_transformations:
-            # 获取    最高置信    度的形```
-            # 获取最高置信度的形状变换
-            best_transform = max(shape_transformations, key=lambda x: x.get('confidence', 0))
-            transform_conf = best_transform.get('confidence', 0)
-            # 根据形状变换的置信度调整总置信度
-            pattern_confidence += transform_conf * 0.2
+    def _find_consistencies(self, pattern):
+        """找出模式中的一致性特征"""
+        # 假设pattern是一组变换的集合
+        examples = pattern.get("examples", [])
+        if not examples or len(examples) < 2:
+            return {}
 
-            # 如果形状变换出现多次，增加置信度
-            count = best_transform.get('count', 0)
-            if count > 2:
-                pattern_confidence += min(0.2, count * 0.05)  # 最多增加0.2
+        # 分析例子中的共同属性
+        consistencies = {
+            "position": {},
+            "color": {},
+            "shape": {},
+            "context": {}
+        }
 
-        # 检查颜色映射模式应用情况
-        color_mappings = self.common_patterns.get('color_mappings', {}).get('mappings', {})
-        if color_mappings:
-            # 计算颜色映射的平均置信度
-            avg_color_conf = sum(mapping.get('confidence', 0) for mapping in color_mappings.values()) / len(color_mappings)
-            pattern_confidence += avg_color_conf * 0.2
+        # 位置一致性
+        positions = [ex.get("position_change", {}) for ex in examples if "position_change" in ex]
+        if positions:
+            delta_rows = [p.get("delta_row") for p in positions if "delta_row" in p]
+            delta_cols = [p.get("delta_col") for p in positions if "delta_col" in p]
 
-            # 如果有颜色偏移模式，增加置信度
-            color_patterns = self.common_patterns.get('color_mappings', {}).get('patterns', [])
-            if color_patterns and any(p.get('type') == 'color_offset' for p in color_patterns):
-                pattern_confidence += 0.1
+            # 检查是否所有例子都有相同的位置变化
+            if delta_rows and all(dr == delta_rows[0] for dr in delta_rows):
+                consistencies["position"]["delta_row"] = delta_rows[0]
+            if delta_cols and all(dc == delta_cols[0] for dc in delta_cols):
+                consistencies["position"]["delta_col"] = delta_cols[0]
 
-        # 检查位置变化模式应用情况
-        position_changes = self.common_patterns.get('position_changes', [])
-        if position_changes:
-            # 获取最高置信度的位置变化
-            best_position = max(position_changes, key=lambda x: x.get('confidence', 0))
-            position_conf = best_position.get('confidence', 0)
-            # 根据位置变化的置信度调整总置信度
-            pattern_confidence += position_conf * 0.2
+        # 颜色一致性
+        color_changes = [ex.get("color_change", {}) for ex in examples if "color_change" in ex]
+        if color_changes:
+            # 合并所有颜色映射
+            all_mappings = {}
+            for change in color_changes:
+                for from_color, to_color in change.items():
+                    if from_color not in all_mappings:
+                        all_mappings[from_color] = []
+                    all_mappings[from_color].append(to_color)
 
-        # 确保置信度不超过1.0
-        pattern_confidence = min(1.0, pattern_confidence)
+            # 找出一致的颜色变换
+            for from_color, to_colors in all_mappings.items():
+                if all(tc == to_colors[0] for tc in to_colors):
+                    consistencies["color"][from_color] = to_colors[0]
 
-        if self.debug:
-            self._debug_print(f"模式预测置信度: {pattern_confidence:.4f}")
+        return consistencies
 
-        return pattern_confidence
+    def _find_variations(self, pattern):
+        """找出模式中的变化性特征"""
+        examples = pattern.get("examples", [])
+        if not examples or len(examples) < 2:
+            return {}
 
-    def _extract_objects_with_param(self, grid, param):
-        """
-        从网格中提取对象，使用指定的参数
+        variations = {
+            "position": {},
+            "color": {},
+            "shape": {},
+            "context_dependent": []
+        }
 
-        Args:
-            grid: 输入网格
-            param: 参数元组 (univalued, diagonal, without_bg)
+        # 分析位置变化的变化性
+        positions = [ex.get("position_change", {}) for ex in examples if "position_change" in ex]
+        if positions:
+            delta_rows = [p.get("delta_row") for p in positions if "delta_row" in p]
+            delta_cols = [p.get("delta_col") for p in positions if "delta_col" in p]
 
-        Returns:
-            提取的对象列表
-        """
-        # 获取网格尺寸
-        height, width = len(grid), len(grid[0])
+            # 检查位置变化是否不一致
+            if delta_rows and not all(dr == delta_rows[0] for dr in delta_rows):
+                # 可能是基于位置的条件变化
+                variations["position"]["delta_row_varies"] = True
+            if delta_cols and not all(dc == delta_cols[0] for dc in delta_cols):
+                variations["position"]["delta_col_varies"] = True
 
-        # 转换网格为元组格式
-        if isinstance(grid, list):
-            grid = tuple(tuple(row) for row in grid)
+        # 分析颜色变化的变化性
+        color_changes = [ex.get("color_change", {}) for ex in examples if "color_change" in ex]
+        if color_changes:
+            # 合并所有颜色映射
+            all_mappings = {}
+            for change in color_changes:
+                for from_color, to_color in change.items():
+                    if from_color not in all_mappings:
+                        all_mappings[from_color] = []
+                    all_mappings[from_color].append(to_color)
 
-        # 使用现有函数提取对象
-        return pureobjects_from_grid(param, 0, 'test', grid, [height, width])
+            # 检查颜色变化是否不一致
+            for from_color, to_colors in all_mappings.items():
+                if not all(tc == to_colors[0] for tc in to_colors):
+                    variations["color"][from_color] = to_colors
 
-    def _create_obj_info(self, pair_id, in_or_out, obj, param, height, width):
-        """
-        创建加权对象信息
+        # 分析上下文相关变化
+        for example in examples:
+            if "original_context" in example and "transformed_context" in example:
+                # 上下文相关变化
+                context = example["original_context"]
+                position = context.get("position_category")
 
-        Args:
-            pair_id: 训练对ID
-            in_or_out: 输入/输出类型
-            obj: 对象
-            param: 提取参数
-            height, width: 网格尺寸
+                if position:
+                    # 添加位置上下文依赖
+                    ctx_dep = {
+                        "type": "position_context",
+                        "position": position,
+                        "transformation": {
+                            "position_change": example.get("position_change", {}),
+                            "color_change": example.get("color_change", {})
+                        }
+                    }
+                    variations["context_dependent"].append(ctx_dep)
 
-        Returns:
-            WeightedObjInfo对象
-        """
-        return WeightedObjInfo(pair_id, in_or_out, obj, obj_params=param, grid_hw=[height, width])
-# ```
+        return variations
+
+    def _extract_conditions(self, consistencies):
+        """从一致性中提取条件"""
+        conditions = []
+
+        # 位置条件
+        pos_consistencies = consistencies.get("position", {})
+        if pos_consistencies:
+            conditions.append({
+                "type": "position",
+                "details": pos_consistencies
+            })
+
+        # 颜色条件
+        color_consistencies = consistencies.get("color", {})
+        if color_consistencies:
+            conditions.append({
+                "type": "color",
+                "details": color_consistencies
+            })
+
+        # 形状条件
+        shape_consistencies = consistencies.get("shape", {})
+        if shape_consistencies:
+            conditions.append({
+                "type": "shape",
+                "details": shape_consistencies
+            })
+
+        return conditions
+
+    def _extract_transformations(self, consistencies, variations):
+        """提取变换规则"""
+        transformations = []
+
+        # 从一致性和变化性中提取变换
+
+        # 1. 位置变换
+        if "position" in consistencies and consistencies["position"]:
+            # 静态位置变换
+            transformations.append({
+                "type": "position_change",
+                "static": consistencies["position"],
+                "dynamic": variations.get("position", {})
+            })
+
+        # 2. 颜色变换
+        if "color" in consistencies and consistencies["color"]:
+            # 静态颜色变换
+            transformations.append({
+                "type": "color_change",
+                "static": consistencies["color"],
+                "dynamic": variations.get("color", {})
+            })
+
+        # 3. 上下文相关变换
+        context_deps = variations.get("context_dependent", [])
+        if context_deps:
+            for ctx_dep in context_deps:
+                transformations.append({
+                    "type": "context_dependent",
+                    "context": ctx_dep.get("type"),
+                    "conditions": ctx_dep,
+                    "transformations": ctx_dep.get("transformation", {})
+                })
+
+        return transformations
+
+    def _calculate_rule_priority(self, pattern):
+        """计算规则优先级"""
+        # 基础优先级
+        priority = 1.0
+
+        # 基于出现频率调整
+        count = pattern.get("instance_count", 0)
+        if count > 0:
+            priority += min(2.0, count * 0.2)  # 最多+2.0
+
+        # 基于权重调整
+        weight = pattern.get("avg_weight", 0)
+        if weight > 0:
+            priority += min(3.0, weight * 0.3)  # 最多+3.0
+
+        # 基于信心调整
+        confidence = pattern.get("confidence", 0)
+        if confidence > 0:
+            priority += confidence * 4.0  # 最多+4.0
+
+        return priority
