@@ -281,6 +281,206 @@ class WeightedARCDiffAnalyzer(ARCDiffAnalyzer):
 
         return output_grid
 
+    def apply_transformation_rules(self, input_grid, common_patterns=None, transformation_rules=None):
+        """
+        应用提取的转换规则，将输入网格转换为预测的输出网格（委托给 rule_applier）
+
+        Args:
+            input_grid: 输入网格
+            common_patterns: 识别的共有模式，如果不提供则使用当前的共有模式
+            transformation_rules: 可选，特定的转换规则列表，如果不提供则使用当前累积的规则
+
+        Returns:
+            预测的输出网格
+        """
+        if self.debug:
+            self._debug_print("调用转换规则应用功能")
+
+        # 使用当前的共有模式（如果未提供）
+        if common_patterns is None:
+            if not self.common_patterns:
+                self.analyze_common_patterns_with_weights()
+            common_patterns = self.common_patterns
+
+        # 使用当前的转换规则（如果未提供）
+        if transformation_rules is None:
+            transformation_rules = self.transformation_rules
+
+        # 获取网格尺寸
+        if isinstance(input_grid, list):
+            input_grid = tuple(tuple(row) for row in input_grid)
+
+        height, width = len(input_grid), len(input_grid[0])
+
+        # 提取输入网格中的对象
+        input_objects = []
+        for param in [(True, True, False), (True, False, False), (False, False, False), (False, True, False)]:
+            objects = pureobjects_from_grid(param, -1, 'test_in', input_grid, [height, width])
+            for obj in objects:
+                input_objects.append(WeightedObjInfo(-1, 'test_in', obj, obj_params=None, grid_hw=[height, width]))
+
+        # 计算测试输入对象的权重
+        self.weight_calculator.calculate_test_object_weights(input_grid, input_objects, self.shape_library)
+
+        # 委托给 rule_applier 处理转换规则的应用
+        return self.rule_applier.apply_transformation_rules(
+            input_grid, common_patterns, input_objects, transformation_rules, self.debug
+        )
+
+    def get_prediction_confidence(self, predicted_output, actual_output):
+        """
+        计算预测与实际输出的匹配程度，返回置信度得分
+
+        Args:
+            predicted_output: 预测的输出网格
+            actual_output: 实际的输出网格
+
+        Returns:
+            匹配置信度 (0-1)
+        """
+        if predicted_output == actual_output:
+            return 1.0  # 完全匹配
+
+        # 计算网格大小
+        if not predicted_output or not actual_output:
+            return 0.0
+
+        height_pred, width_pred = len(predicted_output), len(predicted_output[0])
+        height_act, width_act = len(actual_output), len(actual_output[0])
+
+        # 如果尺寸不同，返回较低的置信度
+        if height_pred != height_act or width_pred != width_act:
+            return 0.1  # 尺寸不匹配，几乎没有信心
+
+        # 计算像素匹配率
+        total_pixels = height_pred * width_pred
+        matching_pixels = 0
+
+        for i in range(height_pred):
+            for j in range(width_pred):
+                if predicted_output[i][j] == actual_output[i][j]:
+                    matching_pixels += 1
+
+        # 基本置信度：匹配像素比例
+        base_confidence = matching_pixels / total_pixels
+
+        # 优化：考虑重要区域的匹配程度
+        # 例如：非背景像素（非0像素）的匹配更重要
+        non_zero_pred = sum(1 for row in predicted_output for pixel in row if pixel != 0)
+        non_zero_act = sum(1 for row in actual_output for pixel in row if pixel != 0)
+
+        # 计算非零像素的匹配
+        non_zero_matching = 0
+        for i in range(height_pred):
+            for j in range(width_pred):
+                if predicted_output[i][j] != 0 and predicted_output[i][j] == actual_output[i][j]:
+                    non_zero_matching += 1
+
+        # 非零像素匹配率（避免除零）
+        if max(non_zero_pred, non_zero_act) > 0:
+            non_zero_confidence = non_zero_matching / max(non_zero_pred, non_zero_act)
+        else:
+            non_zero_confidence = 1.0  # 如果两者都没有非零像素，则认为匹配
+
+        # 加权组合两种置信度，非零区域匹配更重要
+        combined_confidence = 0.3 * base_confidence + 0.7 * non_zero_confidence
+
+        if self.debug:
+            self._debug_print(f"预测置信度: 基本={base_confidence:.4f}, 非零区域={non_zero_confidence:.4f}, 组合={combined_confidence:.4f}")
+
+        return combined_confidence
+
+    def calculate_rule_confidence(self, input_grid, predicted_output):
+        """
+        计算基于规则生成的预测输出的置信度
+
+        Args:
+            input_grid: 输入网格
+            predicted_output: 预测的输出网格
+
+        Returns:
+            规则预测置信度 (0-1)
+        """
+        # 如果没有规则，置信度低
+        if not self.transformation_rules:
+            return 0.2
+
+        # 获取应用规则的数量
+        num_rules_applied = 0
+        total_rule_confidence = 0.0
+
+        # 计算各种规则的应用情况
+        for rule in self.transformation_rules:
+            # 检查规则是否适用于当前输入/输出
+            if self._is_rule_applicable(rule, input_grid, predicted_output):
+                num_rules_applied += 1
+
+                # 计算规则的置信度
+                rule_conf = 0.0
+
+                # 1. 如果规则在训练数据中频繁出现，提高置信度
+                if 'pair_id' in rule:
+                    rule_conf += 0.3  # 基础置信度
+
+                # 2. 考虑对象权重
+                if 'weighted_objects' in rule and rule['weighted_objects']:
+                    avg_weight = sum(obj['weight'] for obj in rule['weighted_objects']) / len(rule['weighted_objects'])
+                    weight_factor = min(1.0, avg_weight / 5.0)  # 规范化到0-1范围
+                    rule_conf += weight_factor * 0.3
+
+                # 3. 考虑模式匹配
+                if 'transformation_patterns' in rule and rule['transformation_patterns']:
+                    patterns = rule['transformation_patterns']
+                    for pattern in patterns:
+                        if pattern.get('confidence', 0) > 0.7:
+                            rule_conf += 0.2
+                            break
+
+                # 累加总置信度
+                total_rule_confidence += rule_conf
+
+        # 如果没有应用规则，返回低置信度
+        if num_rules_applied == 0:
+            return 0.3
+
+        # 计算平均规则置信度，并确保不超过1.0
+        avg_rule_confidence = min(1.0, total_rule_confidence / num_rules_applied)
+
+        if self.debug:
+            self._debug_print(f"规则预测置信度: {avg_rule_confidence:.4f} (应用了 {num_rules_applied} 条规则)")
+
+        return avg_rule_confidence
+
+    def _is_rule_applicable(self, rule, input_grid, predicted_output):
+        """检查规则是否适用于给定的输入/输出对"""
+        # 简化版规则适用性检查
+        # 在实际应用中，可以根据规则的具体内容进行更复杂的检查
+        # 例如检查对象匹配、位置变化、颜色变换等是否符合规则
+
+        # 检查输入网格中是否存在与规则相关的特征
+        if 'object_mappings' in rule and rule['object_mappings']:
+            # 抽取输入网格中的对象
+            height, width = len(input_grid), len(input_grid[0])
+            input_objects = []
+            for param in [(True, True, False), (False, False, False)]:
+                objects = pureobjects_from_grid(param, -1, 'test_in', input_grid, [height, width])
+                for obj in objects:
+                    input_objects.append(WeightedObjInfo(-1, 'test_in', obj, obj_params=None, grid_hw=[height, width]))
+
+            # 检查是否有对象匹配规则中的对象
+            for mapping in rule['object_mappings']:
+                if 'diff_in_object' in mapping:
+                    in_obj_info = mapping['diff_in_object']
+                    # 简化检查：只检查是否有类似大小和颜色的对象
+                    for obj in input_objects:
+                        if (hasattr(obj, 'size') and hasattr(obj, 'main_color') and
+                            abs(obj.size - in_obj_info.get('size', 0)) < 3 and
+                            obj.main_color == in_obj_info.get('main_color')):
+                            return True
+
+        # 默认返回True，表示规则适用
+        return True  # 简化版，实际应用中需要更复杂的匹配逻辑
+
     def _debug_print_object_weights(self, obj_infos, name):
         """
         输出对象权重信息到调试文件

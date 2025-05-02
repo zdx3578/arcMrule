@@ -11,11 +11,11 @@ possible_pypaths = [
     '/kaggle/input/3-28arcdsl/bateson',
     '/Users/zhangdexiang/github/VSAHDC/arcv2',
     '/Users/zhangdexiang/github/VSAHDC/arcv2/forpopper2',
-    '/Users/zhangdexiang/github/VSAHDC/arcv2/bateson',
+    '/Users/zhangdexiang/github/VSAHDC',
     '/home/zdx/github/VSAHDC/arcv2',
     '/home/zdx/github/VSAHDC/arcv2/forpopper2',
     '/home/zdx/github/VSAHDC',
-    '/home/zdx/github/VSAHDC/arcMrule',
+    # '/home/zdx/github/VSAHDC/arcMrule',
     '/another/path/to/check'
 ]
 

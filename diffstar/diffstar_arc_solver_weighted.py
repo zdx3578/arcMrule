@@ -337,9 +337,9 @@ class WeightedARCSolver:
                     final_prediction = weight_based_prediction
                     prediction_method = "weight_patterns"
                     # 计算预测置信度
-                    prediction_confidence = self.diff_analyzer.calculate_pattern_confidence(
-                        input_grid, weight_based_prediction
-                    )
+                    # prediction_confidence = self.diff_analyzer.calculate_pattern_confidence(
+                    #     input_grid, weight_based_prediction
+                    # )
                     if self.debug:
                         print(f"使用方法: 权重模式 (训练成功率 <= 0.5)")
 
