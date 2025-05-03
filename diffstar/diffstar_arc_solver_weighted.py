@@ -293,8 +293,8 @@ class WeightedARCSolver:
             # 现在处理测试数据
             if self.debug:
                 print(f"\n\n\n\n\n===== 处理测试数据 =====")
-                print(f"训练验证成功率: {train_success_rate:.2f}")
-                print(f"测试样例数量: {total_test_count}")
+                print(f"\n\n\n\n\n训练验证成功率: {train_success_rate:.2f}\n\n\n\n\n")
+                print(f"测试样例数量: {total_test_count}\n\n\n\n\n")
 
             for i, example in enumerate(task['test']):
                 if self.debug:
@@ -401,30 +401,31 @@ class WeightedARCSolver:
                     print(f"总测试样例: {total_test_count}")
                     print(f"使用参数: {param}")
 
-            return {
-                'task_id': task_id,
-                'common_patterns': common_patterns,
-                'mapping_rules': self.diff_analyzer.mapping_rules,
-                'transformation_rules': self.diff_analyzer.transformation_rules,
-                'test_predictions': test_predictions,
-                'train_validation': {
-                    'success_count': train_success_count,
-                    'total_count': len(task['train']),
-                    'success_rate': train_success_rate,
-                    'detailed_results': train_validation_results
-                },
-                'test_evaluation': {
-                    'success_count': test_success_count,
-                    'total_count': total_test_count,
-                    'success_rate': test_success_count / total_test_count if total_test_count > 0 else 0
-                },
-                'weighted_info': {
-                    'pixel_threshold_pct': self.diff_analyzer.pixel_threshold_pct,
-                    'weight_increment': self.diff_analyzer.weight_increment,
-                    'diff_weight_increment': self.diff_analyzer.diff_weight_increment,
-                    'color_statistics': self.diff_analyzer.color_statistics
+            if  train_success_rate > 0.98:
+                return {
+                    'task_id': task_id,
+                    'common_patterns': common_patterns,
+                    'mapping_rules': self.diff_analyzer.mapping_rules,
+                    'transformation_rules': self.diff_analyzer.transformation_rules,
+                    'test_predictions': test_predictions,
+                    'train_validation': {
+                        'success_count': train_success_count,
+                        'total_count': len(task['train']),
+                        'success_rate': train_success_rate,
+                        'detailed_results': train_validation_results
+                    },
+                    'test_evaluation': {
+                        'success_count': test_success_count,
+                        'total_count': total_test_count,
+                        'success_rate': test_success_count / total_test_count if total_test_count > 0 else 0
+                    },
+                    'weighted_info': {
+                        'pixel_threshold_pct': self.diff_analyzer.pixel_threshold_pct,
+                        'weight_increment': self.diff_analyzer.weight_increment,
+                        'diff_weight_increment': self.diff_analyzer.diff_weight_increment,
+                        'color_statistics': self.diff_analyzer.color_statistics
+                    }
                 }
-            }
 
     def process_all_tasks(self, task_type='train', limit=None):
         """
