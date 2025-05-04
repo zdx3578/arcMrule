@@ -10,12 +10,12 @@ from typing import List, Dict, Tuple, Any, Optional, Callable
 
 class WeightCalculator:
     """处理对象权重计算的类"""
-    
-    def __init__(self, pixel_threshold_pct=60, weight_increment=1,
+
+    def __init__(self, pixel_threshold_pct=40, weight_increment=1,
                  diff_weight_increment=2, debug_print=None):
         """
         初始化权重计算器
-        
+
         Args:
             pixel_threshold_pct: 颜色占比阈值（百分比），超过此阈值的颜色视为背景
             weight_increment: 对象权重增量
@@ -26,7 +26,19 @@ class WeightCalculator:
         self.weight_increment = weight_increment
         self.diff_weight_increment = diff_weight_increment
         self.debug_print = debug_print
-    
+        self.background_colors = set()  # 全局背景色集合
+
+    def set_background_colors(self, background_colors):
+        """
+        设置全局背景色
+
+        Args:
+            background_colors: 背景色集合
+        """
+        self.background_colors = background_colors
+        if self.debug_print:
+            self.debug_print(f"设置全局背景色: {background_colors}")
+
     def calculate_object_weights(self, pair_id, input_grid, output_grid,
                                 input_obj_infos, output_obj_infos,
                                 diff_in_obj_infos, diff_out_obj_infos,
@@ -95,7 +107,7 @@ class WeightCalculator:
         # 5. 考虑颜色占比，调整背景对象权重
         self._adjust_background_object_weights(input_grid, input_obj_infos)
         self._adjust_background_object_weights(output_grid, output_obj_infos)
-    
+
     def calculate_test_object_weights(self, input_grid, input_obj_infos, shape_library):
         """
         计算测试输入对象的权重
@@ -129,7 +141,7 @@ class WeightCalculator:
 
         # 3. 考虑颜色占比，调整背景对象权重
         self._adjust_background_object_weights(input_grid, input_obj_infos)
-    
+
     def _create_position_object_map(self, obj_infos):
         """
         创建坐标到对象的映射，用于快速查找特定位置的对象
@@ -147,7 +159,7 @@ class WeightCalculator:
                 pos_to_obj[(i, j)].append(obj_info)
 
         return pos_to_obj
-    
+
     def _add_shape_matching_weights(self, input_obj_infos, output_obj_infos):
         """
         基于形状匹配增加对象权重
@@ -195,7 +207,7 @@ class WeightCalculator:
                 obj_info.increase_weight(shape_bonus)
                 if self.debug_print:
                     self.debug_print(f"增加对象 {obj_info.obj_id} 的形状匹配权重 +{shape_bonus}，现在为 {obj_info.obj_weight}")
-    
+
     def _adjust_background_object_weights(self, grid, obj_infos):
         """
         基于颜色占比调整背景对象权重
@@ -204,22 +216,25 @@ class WeightCalculator:
             grid: 网格
             obj_infos: 对象信息列表
         """
-        # 计算每种颜色的像素数
-        color_counts = defaultdict(int)
-        total_pixels = len(grid) * len(grid[0])
+        background_colors = self.background_colors
 
-        for i in range(len(grid)):
-            for j in range(len(grid[0])):
-                color_counts[grid[i][j]] += 1
+        # 如果没有预设的背景色，则使用原始方法计算
+        if not background_colors:
+            # 计算每种颜色的像素数
+            color_counts = defaultdict(int)
+            total_pixels = len(grid) * len(grid[0])
 
-        # 找出背景颜色（占比超过阈值的颜色）
-        background_colors = set()
-        for color, count in color_counts.items():
-            percentage = (count / total_pixels) * 100
-            if percentage > self.pixel_threshold_pct:
-                background_colors.add(color)
-                if self.debug_print:
-                    self.debug_print(f"识别到背景颜色: {color}, 占比: {percentage:.2f}%")
+            for i in range(len(grid)):
+                for j in range(len(grid[0])):
+                    color_counts[grid[i][j]] += 1
+
+            # 找出背景颜色（占比超过阈值的颜色）
+            for color, count in color_counts.items():
+                percentage = (count / total_pixels) * 100
+                if percentage > self.pixel_threshold_pct:
+                    background_colors.add(color)
+                    if self.debug_print:
+                        self.debug_print(f"单独网格中识别到背景颜色: {color}, 占比: {percentage:.2f}%")
 
         # 调整背景对象的权重
         for obj_info in obj_infos:
@@ -236,7 +251,7 @@ class WeightCalculator:
                     obj_info.set_weight(new_weight)
                     if self.debug_print:
                         self.debug_print(f"降低背景对象 {obj_info.obj_id} 权重至 {new_weight}，背景色占比 {bg_percentage:.1f}%")
-    
+
     def _get_hashable_representation(self, obj_set):
         """
         将对象集合转换为可哈希的表示

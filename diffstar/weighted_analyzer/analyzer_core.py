@@ -82,6 +82,18 @@ class WeightedARCDiffAnalyzer(ARCDiffAnalyzer):
         self.pattern_analyzer = PatternAnalyzer(self._debug_print if debug else None)
         self.rule_applier = RuleApplier(self._debug_print if debug else None)
 
+    def set_background_colors(self, background_colors):
+        """
+        设置全局背景色
+
+        Args:
+            background_colors: 背景色集合
+        """
+        self.background_colors = background_colors
+        # 如果使用了权重计算器，将背景色传递给它
+        if hasattr(self, 'weight_calculator'):
+            self.weight_calculator.set_background_colors(background_colors)
+
     def add_train_pair(self, pair_id, input_grid, output_grid, param):
         """
         添加一对训练数据，提取对象并计算权重

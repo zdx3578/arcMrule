@@ -17,7 +17,7 @@ cgitb.enable(format='text')
 class WeightedARCSolver:
     """ARC问题解决器，使用带权重的差异网格分析"""
 
-    def __init__(self, data_dir=None, debug=True, pixel_threshold_pct=60):
+    def __init__(self, data_dir=None, debug=True, pixel_threshold_pct=40):
         """
         初始化增强型ARC解决器
 
@@ -184,6 +184,73 @@ class WeightedARCSolver:
                 print(f"未找到任务ID: {task_id}")
                 return None
 
+    def determine_background_colors(self, task_data):
+        """
+        分析所有训练数据确定背景色
+
+        Args:
+            task_data: 任务数据
+
+        Returns:
+            背景色集合
+        """
+        from collections import defaultdict
+
+        all_grids = []
+
+        # 收集所有输入和输出网格
+        for example in task_data['train']:
+            all_grids.append(example['input'])
+            all_grids.append(example['output'])
+
+        # 统计每个网格中各颜色的占比
+        grid_color_percentages = []
+
+        for grid in all_grids:
+            if not grid:  # 跳过空网格
+                continue
+
+            total_pixels = len(grid) * len(grid[0])
+            if total_pixels == 0:  # 避免除零错误
+                continue
+
+            color_counts = defaultdict(int)
+
+            for row in grid:
+                for cell in row:
+                    color_counts[cell] += 1
+
+            # 计算每种颜色的百分比
+            color_percentages = {color: (count / total_pixels * 100)
+                                for color, count in color_counts.items()}
+
+            grid_color_percentages.append(color_percentages)
+
+        # 找出在所有网格中都超过阈值的颜色
+        background_colors = set()
+
+        if grid_color_percentages:
+            # 获取所有出现的颜色
+            all_colors = set()
+            for percentages in grid_color_percentages:
+                all_colors.update(percentages.keys())
+
+            for color in all_colors:
+                # 检查颜色是否在每个网格中都超过阈值
+                is_background = True
+                for percentages in grid_color_percentages:
+                    # 如果颜色不在某个网格中或占比低于阈值，则不是背景色
+                    if color not in percentages or percentages[color] < self.diff_analyzer.pixel_threshold_pct:
+                        is_background = False
+                        break
+
+                if is_background:
+                    background_colors.add(color)
+                    if self.debug:
+                        print(f"确定全局背景色: {color}")
+
+        return background_colors
+
     def process_task(self, task_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         处理ARC任务数据，使用加权分析器
@@ -243,6 +310,12 @@ class WeightedARCSolver:
             (False, False, False),
             (False, True, False)       ]
 
+        # 在处理训练数据前确定背景色
+        background_colors = self.determine_background_colors(task)
+        self.diff_analyzer.set_background_colors(background_colors)
+
+        if self.debug and background_colors:
+            print(f"任务 {task_id} 的全局背景色: {background_colors}")
 
         for param in param_combinations:
             for i, example in enumerate(task['train']):
