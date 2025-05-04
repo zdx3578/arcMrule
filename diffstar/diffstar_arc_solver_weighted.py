@@ -184,15 +184,15 @@ class WeightedARCSolver:
                 print(f"未找到任务ID: {task_id}")
                 return None
 
-    def determine_background_colors(self, task_data):
+    def determine_background_color(self, task_data):
         """
-        分析所有训练数据确定背景色
+        分析所有训练数据确定背景色，只返回占比最大的背景色值
 
         Args:
             task_data: 任务数据
 
         Returns:
-            背景色集合
+            背景色值(单个整数)，如果没有满足条件的背景色则返回None
         """
         from collections import defaultdict
 
@@ -203,8 +203,9 @@ class WeightedARCSolver:
             all_grids.append(example['input'])
             all_grids.append(example['output'])
 
-        # 统计每个网格中各颜色的占比
-        grid_color_percentages = []
+        # 统计所有网格中各颜色的总占比
+        color_total_percentages = defaultdict(float)
+        color_appearance_count = defaultdict(int)
 
         for grid in all_grids:
             if not grid:  # 跳过空网格
@@ -220,36 +221,37 @@ class WeightedARCSolver:
                 for cell in row:
                     color_counts[cell] += 1
 
-            # 计算每种颜色的百分比
-            color_percentages = {color: (count / total_pixels * 100)
-                                for color, count in color_counts.items()}
+            # 计算每种颜色的百分比并累加
+            for color, count in color_counts.items():
+                percentage = (count / total_pixels * 100)
+                color_total_percentages[color] += percentage
+                color_appearance_count[color] += 1
 
-            grid_color_percentages.append(color_percentages)
+        # 计算每种颜色的平均占比
+        color_avg_percentages = {}
+        for color, total_pct in color_total_percentages.items():
+            color_avg_percentages[color] = total_pct / color_appearance_count[color]
 
-        # 找出在所有网格中都超过阈值的颜色
-        background_colors = set()
+        # 按平均占比排序颜色
+        sorted_colors = sorted(
+            color_avg_percentages.items(),
+            key=lambda x: x[1],
+            reverse=True
+        )
 
-        if grid_color_percentages:
-            # 获取所有出现的颜色
-            all_colors = set()
-            for percentages in grid_color_percentages:
-                all_colors.update(percentages.keys())
+        background_color = None
 
-            for color in all_colors:
-                # 检查颜色是否在每个网格中都超过阈值
-                is_background = True
-                for percentages in grid_color_percentages:
-                    # 如果颜色不在某个网格中或占比低于阈值，则不是背景色
-                    if color not in percentages or percentages[color] < self.diff_analyzer.pixel_threshold_pct:
-                        is_background = False
-                        break
+        # 只获取占比最大的颜色作为背景色
+        if sorted_colors:
+            max_color, max_percentage = sorted_colors[0]
+            # 确保占比超过阈值
+            if max_percentage >= self.diff_analyzer.pixel_threshold_pct:
+                background_color = max_color
+                if self.debug:
+                    print(f"确定全局背景色: {max_color} (占比: {max_percentage:.2f}%)")
 
-                if is_background:
-                    background_colors.add(color)
-                    if self.debug:
-                        print(f"确定全局背景色: {color}")
+        return background_color
 
-        return background_colors
 
     def process_task(self, task_data: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -311,11 +313,12 @@ class WeightedARCSolver:
             (False, True, False)       ]
 
         # 在处理训练数据前确定背景色
-        background_colors = self.determine_background_colors(task)
-        self.diff_analyzer.set_background_colors(background_colors)
+        background_color = self.determine_background_color(task)
+        # background_color = set(background_color)  # 转换为集合以去重
+        self.diff_analyzer.set_background_colors(background_color)
 
-        if self.debug and background_colors:
-            print(f"任务 {task_id} 的全局背景色: {background_colors}")
+        if self.debug and background_color:
+            print(f"任务 {task_id} 的全局背景色: {background_color}")
 
         for param in param_combinations:
             for i, example in enumerate(task['train']):
@@ -324,7 +327,7 @@ class WeightedARCSolver:
                 output_grid = example['output']
 
                 # 添加到差异分析器
-                self.diff_analyzer.add_train_pair(i, input_grid, output_grid, param)
+                self.diff_analyzer.add_train_pair(i, input_grid, output_grid, param, background_color)
 
             # 分析共有模式（使用带权重的版本）
             common_patterns = self.diff_analyzer.analyze_common_patterns_with_weights()

@@ -104,9 +104,9 @@ class WeightCalculator:
         # 4. 基于形状匹配增加权重
         self._add_shape_matching_weights(input_obj_infos, output_obj_infos)
 
-        # 5. 考虑颜色占比，调整背景对象权重
-        self._adjust_background_object_weights(input_grid, input_obj_infos)
-        self._adjust_background_object_weights(output_grid, output_obj_infos)
+        # 5. 考虑颜色占比，调整背景对象权重 #!（计算背景色，去掉这里权重设置）
+        # self._adjust_background_object_weights(input_grid, input_obj_infos)
+        # self._adjust_background_object_weights(output_grid, output_obj_infos)
 
     def calculate_test_object_weights(self, input_grid, input_obj_infos, shape_library):
         """

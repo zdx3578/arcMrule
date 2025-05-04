@@ -94,7 +94,7 @@ class WeightedARCDiffAnalyzer(ARCDiffAnalyzer):
         if hasattr(self, 'weight_calculator'):
             self.weight_calculator.set_background_colors(background_colors)
 
-    def add_train_pair(self, pair_id, input_grid, output_grid, param):
+    def add_train_pair(self, pair_id, input_grid, output_grid, param, background_color):
         """
         添加一对训练数据，提取对象并计算权重
 
@@ -132,10 +132,10 @@ class WeightedARCDiffAnalyzer(ARCDiffAnalyzer):
 
         # 提取对象
         input_objects = pureobjects_from_grid(
-            param, pair_id, 'in', input_grid, [height_in, width_in]
+            param, pair_id, 'in', input_grid, [height_in, width_in], background_color=background_color
         )
         output_objects = pureobjects_from_grid(
-            param, pair_id, 'out', output_grid, [height_out, width_out]
+            param, pair_id, 'out', output_grid, [height_out, width_out], background_color=background_color
         )
 
         # 转换为加权对象信息
@@ -157,10 +157,10 @@ class WeightedARCDiffAnalyzer(ARCDiffAnalyzer):
         if diff_in is not None and diff_out is not None:
             height_diff, width_diff = len(diff_in), len(diff_in[0])
             diff_in_objects = pureobjects_from_grid(
-                param, pair_id, 'diff_in', diff_in, [height_diff, width_diff]
+                param, pair_id, 'diff_in', diff_in, [height_diff, width_diff], background_color=background_color
             )
             diff_out_objects = pureobjects_from_grid(
-                param, pair_id, 'diff_out', diff_out, [height_diff, width_diff]
+                param, pair_id, 'diff_out', diff_out, [height_diff, width_diff], background_color=background_color
             )
 
             # 转换为加权对象信息
