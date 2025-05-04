@@ -55,6 +55,7 @@ class ObjInfo:
         self.pair_id = pair_id
         self.in_or_out = in_or_out
         self.original_obj = obj
+        self.obj = obj
         self.obj_params = obj_params if obj_params else (True, True, False)
         self.grid_hw = grid_hw
         self.background = background
@@ -70,6 +71,8 @@ class ObjInfo:
             uppermost(obj), leftmost(obj),
             lowermost(obj), rightmost(obj)
         )
+        self.top = uppermost(obj)
+        self.left = leftmost(obj)
 
         # 颜色信息
         self.color_ranking = palette(obj)
