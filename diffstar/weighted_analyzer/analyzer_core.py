@@ -204,19 +204,7 @@ class WeightedARCDiffAnalyzer(ARCDiffAnalyzer):
             diff_in, diff_out
         )
 
-        # 新增: 提取基于形状的颜色变化规则
-        shape_color_rule = self._extract_shape_color_rules(
-            pair_id, input_obj_infos, output_obj_infos,
-            diff_in_obj_infos, diff_out_obj_infos
-        )
-        if shape_color_rule:
-            self.shape_color_rules.append(shape_color_rule)
 
-        # 新增: 提取更通用的属性依赖规则
-        attr_rules = self._extract_attribute_dependency_rules(
-            pair_id, input_obj_infos, output_obj_infos
-        )
-        self.attribute_dependency_rules.extend(attr_rules)
 
         # 分析diff映射关系
         mapping_rule = self.object_matcher.analyze_diff_mapping_with_weights(
@@ -226,9 +214,24 @@ class WeightedARCDiffAnalyzer(ARCDiffAnalyzer):
 
         self.mapping_rules.append(mapping_rule)
 
+        # 新增: 提取基于形状的颜色变化规则
+        shape_color_rule = self._extract_shape_color_rules(
+            pair_id, input_obj_infos, output_obj_infos,
+            diff_in_obj_infos, diff_out_obj_infos
+        )
+        if shape_color_rule:
+            self.mapping_rules.append(shape_color_rule)
+
+        # 新增: 提取更通用的属性依赖规则
+        attr_rules = self._extract_attribute_dependency_rules(
+            pair_id, input_obj_infos, output_obj_infos
+        )
+        self.mapping_rules.extend(attr_rules)
+
+
         if self.debug:
             self._debug_save_json(mapping_rule, f"mapping_rule_{pair_id}")
-            self._debug_print(f"完成训练对 {pair_id} 的分析和权重计算")
+            self._debug_print(f"\n\nadd_train_pair:完成训练对 {pair_id} 的分析和权重计算")
             self._debug_print_object_weights(input_obj_infos, f"input_obj_weights_{pair_id}")
             self._debug_print_object_weights(output_obj_infos, f"output_obj_weights_{pair_id}")
             self._debug_print_object_weights(diff_in_obj_infos, f"diff_in_obj_weights_{pair_id}")
@@ -426,23 +429,25 @@ class WeightedARCDiffAnalyzer(ARCDiffAnalyzer):
             for out_obj in output_objects:
                 # 计算相似度分数
                 shape_sim = self._shape_similarity(in_obj, out_obj)
-                pos_sim = self._position_similarity(in_obj, out_obj)
+                # pos_sim = self._position_similarity(in_obj, out_obj)
 
                 # 综合分数
-                score = 0.6 * shape_sim + 0.4 * pos_sim
+                # score = 0.6 * shape_sim + 0.4 * pos_sim
+                score = shape_sim
 
                 if score > best_score:
                     best_score = score
                     best_match = out_obj
 
             # 只有当相似度足够高时才认为匹配有效
-            if best_score > 0.5 and best_match:
+            if best_score > 0.8 and best_match:
                 matches.append((in_obj, best_match))
 
         return matches
 
     def _extract_shape_features(self, obj_info):
         """提取对象的形状特征"""
+        #! if same color
         return {
             "height": obj_info.height,
             "width": obj_info.width,
@@ -472,11 +477,16 @@ class WeightedARCDiffAnalyzer(ARCDiffAnalyzer):
     def _shape_similarity(self, obj1, obj2):
         """计算两个对象的形状相似度"""
         # 简单实现，可以根据需要增强
-        size_sim = min(obj1.size, obj2.size) / max(obj1.size, obj2.size)
-        aspect_sim = min(obj1.width/max(1,obj1.height), obj2.width/max(1,obj2.height)) / \
-                    max(obj1.width/max(1,obj1.height), obj2.width/max(1,obj2.height))
+        # size_sim = min(obj1.size, obj2.size) / max(obj1.size, obj2.size)
+        # aspect_sim = min(obj1.width/max(1,obj1.height), obj2.width/max(1,obj2.height)) / \
+        #             max(obj1.width/max(1,obj1.height), obj2.width/max(1,obj2.height))
 
-        return 0.7 * size_sim + 0.3 * aspect_sim
+        # return 0.7 * size_sim + 0.3 * aspect_sim
+        #! now if same; todo if part subparts
+        if obj1.obj_000 == obj2.obj_000:
+            return 1.0
+        elif obj1.obj_000 != obj2.obj_000:
+            return 0.0
 
     def _position_similarity(self, obj1, obj2):
         """计算两个对象的位置相似度，简化为只比较左上角位置"""
@@ -558,6 +568,9 @@ class WeightedARCDiffAnalyzer(ARCDiffAnalyzer):
         if not self.mapping_rules:
             return {}
 
+        #! _extract_shape_color_rules,_extract_attribute_dependency_rules 改进从提取的数据对规则分析通用规则
+        #! _extract_cross_object_shape_color_rules need todo
+
         # 调用PatternAnalyzer的方法分析基本模式
         self.common_patterns = self.pattern_analyzer.analyze_common_patterns(self.mapping_rules)
 
@@ -573,7 +586,7 @@ class WeightedARCDiffAnalyzer(ARCDiffAnalyzer):
 
         if self.debug:
             self._debug_save_json(self.common_patterns, "weighted_common_patterns")
-            self._debug_print(f"找到 {len(self.common_patterns.get('shape_transformations', []))} 个加权共有形状变换模式")
+            self._debug_print(f"\n\ncommon_patterns: 找到 {len(self.common_patterns.get('shape_transformations', []))} 个加权共有形状变换模式")
             self._debug_print(f"找到 {len(self.common_patterns.get('color_mappings', {}).get('mappings', {}))} 个加权共有颜色映射")
             self._debug_print(f"找到 {len(self.common_patterns.get('position_changes', []))} 个加权共有位置变化模式")
 

@@ -140,7 +140,7 @@ class WeightCalculator:
                     break
 
         # 3. 考虑颜色占比，调整背景对象权重
-        self._adjust_background_object_weights(input_grid, input_obj_infos)
+        # self._adjust_background_object_weights(input_grid, input_obj_infos)
 
     def _create_position_object_map(self, obj_infos):
         """

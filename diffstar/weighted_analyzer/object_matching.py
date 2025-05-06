@@ -12,16 +12,16 @@ from .utils import get_hashable_representation
 
 class ObjectMatcher:
     """处理对象匹配和映射的类"""
-    
+
     def __init__(self, debug_print=None):
         """
         初始化对象匹配器
-        
+
         Args:
             debug_print: 调试打印函数（可选）
         """
         self.debug_print = debug_print
-        
+
     def analyze_diff_mapping_with_weights(self, pair_id, input_grid, output_grid, diff_in, diff_out,
                                         input_obj_infos, output_obj_infos, diff_in_obj_infos, diff_out_obj_infos):
         """
@@ -37,14 +37,19 @@ class ObjectMatcher:
         Returns:
             映射规则字典
         """
+
+        #! !
+        diff_in_obj_infos = input_obj_infos
+        diff_out_obj_infos = output_obj_infos
+
         if self.debug_print:
             self.debug_print(f"基于权重分析差异映射关系，pair_id={pair_id}")
 
         mapping_rule = {
             "pair_id": pair_id,
-            "object_mappings": [],
-            "shape_transformations": [],
-            "color_mappings": {},
+            "Rule_object_mappings": [],
+            "Rule_shape_transformations": [],
+            "Rule_color_mappings": {},
             "position_changes": [],
             "part_whole_relationships": [],
             "weighted_objects": [],  # 添加权重信息
@@ -85,7 +90,7 @@ class ObjectMatcher:
             position_change = in_obj.get_positional_change(out_obj)
 
             # 添加到映射规则
-            mapping_rule["object_mappings"].append({
+            mapping_rule["Rule_object_mappings"].append({
                 "diff_in_object": in_obj.to_dict(),
                 "diff_out_object": out_obj.to_dict(),
                 "match_info": match_info,
@@ -93,7 +98,7 @@ class ObjectMatcher:
             })
 
             # 记录形状变换
-            mapping_rule["shape_transformations"].append({
+            mapping_rule["Rule_shape_transformations"].append({
                 "in_obj_id": in_obj.obj_id,
                 "out_obj_id": out_obj.obj_id,
                 "transform_type": match_info["transform_type"],
@@ -106,16 +111,20 @@ class ObjectMatcher:
             # 记录颜色映射
             if color_transformation and color_transformation.get("color_mapping"):
                 for from_color, to_color in color_transformation["color_mapping"].items():
-                    if from_color not in mapping_rule["color_mappings"]:
-                        mapping_rule["color_mappings"][from_color] = {
+                    if from_color not in mapping_rule["Rule_color_mappings"]:
+                        mapping_rule["Rule_color_mappings"][from_color] = {
                             "to_color": to_color,
-                            "weight": in_obj.obj_weight  # 使用输入对象权重作为颜色映射权重
+                            "weight": in_obj.obj_weight,  # 使用输入对象权重作为颜色映射权重
+                            "in_obj_id": in_obj.obj_id,   # 添加输入对象ID
+                            "out_obj_id": out_obj.obj_id  # 添加输出对象ID
                         }
-                    elif in_obj.obj_weight > mapping_rule["color_mappings"][from_color]["weight"]:
+                    elif in_obj.obj_weight > mapping_rule["Rule_color_mappings"][from_color]["weight"]:
                         # 如果当前对象权重更高，更新颜色映射
-                        mapping_rule["color_mappings"][from_color] = {
+                        mapping_rule["Rule_color_mappings"][from_color] = {
                             "to_color": to_color,
-                            "weight": in_obj.obj_weight
+                            "weight": in_obj.obj_weight,
+                            "in_obj_id": in_obj.obj_id,   # 添加输入对象ID
+                            "out_obj_id": out_obj.obj_id  # 添加输出对象ID
                         }
 
             # 记录位置变化
@@ -160,7 +169,7 @@ class ObjectMatcher:
         mapping_rule["input_to_output_transformation"] = transformation_rule
 
         return mapping_rule
-        
+
     def _find_object_mappings_by_shape_and_weight(self, diff_in_obj_infos, diff_out_obj_infos):
         """
         基于形状匹配和权重寻找对象映射
@@ -218,15 +227,15 @@ class ObjectMatcher:
                 matched_out_objs.add(best_match.obj_id)  # 标记该输出对象已匹配
 
         return mappings
-        
+
     def _capture_object_context(self, obj_info, grid):
         """
         捕获对象的上下文环境（周围的颜色和对象）
-        
+
         Args:
             obj_info: 对象信息
             grid: 所在网格
-            
+
         Returns:
             上下文信息字典
         """
@@ -234,26 +243,26 @@ class ObjectMatcher:
             "surrounding_colors": {},
             "object_position": "unknown"  # 例如：中心、边缘、角落等
         }
-        
+
         # 如果对象或网格为空，则返回空上下文
         if not obj_info or not grid:
             return context
-            
+
         # 获取对象的边界框
         min_row = min(i for _, (i, _) in obj_info.original_obj)
         max_row = max(i for _, (i, _) in obj_info.original_obj)
         min_col = min(j for _, (_, j) in obj_info.original_obj)
         max_col = max(j for _, (_, j) in obj_info.original_obj)
-        
+
         # 确定对象在网格中的位置
         grid_height, grid_width = len(grid), len(grid[0])
-        
+
         # 计算对象的中心点在网格中的相对位置
         center_row = (min_row + max_row) / 2
         center_col = (min_col + max_col) / 2
         rel_row = center_row / grid_height
         rel_col = center_col / grid_width
-        
+
         # 确定对象位置描述
         if rel_row < 0.25:
             v_pos = "top"
@@ -261,19 +270,19 @@ class ObjectMatcher:
             v_pos = "bottom"
         else:
             v_pos = "middle"
-            
+
         if rel_col < 0.25:
             h_pos = "left"
         elif rel_col > 0.75:
             h_pos = "right"
         else:
             h_pos = "center"
-            
+
         context["object_position"] = f"{v_pos}-{h_pos}"
-        
+
         # 创建对象像素位置集合，方便快速查找
         obj_pixels = {(i, j) for _, (i, j) in obj_info.original_obj}
-        
+
         # 扫描周围像素，收集上下文信息
         for i in range(max(0, min_row-1), min(grid_height, max_row+2)):
             for j in range(max(0, min_col-1), min(grid_width, max_col+2)):
@@ -283,9 +292,9 @@ class ObjectMatcher:
                     if color not in context["surrounding_colors"]:
                         context["surrounding_colors"][color] = 0
                     context["surrounding_colors"][color] += 1
-                    
+
         return context
-        
+
     def _analyze_input_to_output_transformation(self, pair_id, input_grid, output_grid,
                                           input_obj_infos, output_obj_infos,
                                           diff_in_obj_infos, diff_out_obj_infos,
@@ -304,7 +313,7 @@ class ObjectMatcher:
             转换规则字典
         """
         if self.debug_print:
-            self.debug_print(f"分析输入到输出的转换规则，pair_id={pair_id}")
+            self.debug_print(f"\n\nInToOut:分析输入到输出的转换规则，pair_id={pair_id}")
 
         # 初始化转换规则
         transformation_rule = {
@@ -466,14 +475,14 @@ class ObjectMatcher:
         transformation_rule["transformation_patterns"] = transformation_patterns
 
         if self.debug_print:
-            self.debug_print(f"找到 {len(transformation_rule['preserved_objects'])} 个保留的对象")
-            self.debug_print(f"找到 {len(transformation_rule['modified_objects'])} 个修改的对象")
-            self.debug_print(f"找到 {len(transformation_rule['removed_objects'])} 个移除的对象")
-            self.debug_print(f"找到 {len(transformation_rule['added_objects'])} 个新增的对象")
-            self.debug_print(f"提取了 {len(transformation_patterns)} 个抽象转换模式")
+            self.debug_print(f"OneInOut找到 {len(transformation_rule['preserved_objects'])} 个保留的对象")
+            self.debug_print(f"OneInOut找到 {len(transformation_rule['modified_objects'])} 个修改的对象")
+            self.debug_print(f"OneInOut找到 {len(transformation_rule['removed_objects'])} 个移除的对象")
+            self.debug_print(f"OneInOut找到 {len(transformation_rule['added_objects'])} 个新增的对象")
+            self.debug_print(f"OneInOut找到 {len(transformation_patterns)} 个抽象转换模式")
 
         return transformation_rule
-        
+
     def _check_if_generated_from(self, output_obj, input_objs, diff_input_objs):
         """检查输出对象是否可能由输入对象生成"""
         possible_sources = []
@@ -525,7 +534,7 @@ class ObjectMatcher:
         possible_sources.sort(key=lambda x: (x.get("weight_product", 0), x.get("confidence", 0)), reverse=True)
 
         return possible_sources
-        
+
     def _check_if_combined(self, output_obj, input_obj1, input_obj2):
         """检查输出对象是否是两个输入对象的组合"""
         out_pixels = {loc for _, loc in output_obj.original_obj}
@@ -544,7 +553,7 @@ class ObjectMatcher:
             }
 
         return None
-        
+
     def _check_common_operations(self, output_obj, input_obj):
         """检查常见操作如填充、描边等"""
         # 提取像素集
@@ -567,7 +576,7 @@ class ObjectMatcher:
             }
 
         return None
-        
+
     def _is_surrounding(self, outline_pixels, inner_pixels):
         """检查一组像素是否围绕另一组像素"""
         # 简化实现，检查是否存在相邻关系
@@ -577,7 +586,7 @@ class ObjectMatcher:
                 if (ni, nj) in outline_pixels:
                     return True
         return False
-        
+
     def _extract_transformation_patterns(self, preserved, modified, removed, added):
         """提取抽象转换模式"""
         patterns = []
