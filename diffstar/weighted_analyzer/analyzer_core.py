@@ -558,45 +558,128 @@ class WeightedARCDiffAnalyzer(ARCDiffAnalyzer):
 
         return None
 
+    """
+    将多维度关系库系统集成到ARC分析流程中的示例
+    """
+
     def analyze_common_patterns_with_weights(self):
         """
-        分析多对训练数据的共有模式，考虑权重因素
+        改进的版本：分析多对训练数据的共同模式，考虑权重因素，
+        通过多维度关系库发现复杂的跨实例模式
 
         Returns:
-            共有模式字典
+            带权重的共同模式字典
         """
         if not self.mapping_rules:
             return {}
 
-        #! _extract_shape_color_rules,_extract_attribute_dependency_rules 改进从提取的数据对规则分析通用规则
-        #! _extract_cross_object_shape_color_rules need todo
+        # 1. 初始化多维度关系库系统
+        from arc_relationship_libraries import ARCRelationshipLibraries
+        relationship_libs = ARCRelationshipLibraries(debug=self.debug, debug_print=self._debug_print)
 
-        # 调用PatternAnalyzer的方法分析基本模式
-        self.common_patterns = self.pattern_analyzer.analyze_common_patterns(self.mapping_rules)
+        # 2. 构建关系库
+        relationship_libs.build_libraries_from_data(self.mapping_rules, self.all_objects)
 
-        # 新增: 归纳形状-颜色规则
-        shape_color_patterns = self._induce_shape_color_patterns()
-        if shape_color_patterns:
-            self.common_patterns['shape_color_rules'] = shape_color_patterns
+        # 3. 查找跨数据对的模式
+        cross_pair_patterns = relationship_libs.find_patterns_across_pairs()
 
-        # 新增: 归纳属性依赖规则
-        attr_dependency_patterns = self._induce_attribute_dependency_patterns()
-        if attr_dependency_patterns:
-            self.common_patterns['attribute_dependencies'] = attr_dependency_patterns
+        # 4. 调用原始的模式分析器获取基本模式
+        basic_patterns = self.pattern_analyzer.analyze_common_patterns(self.mapping_rules)
 
+        # 5. 结合基本模式和跨数据对模式
+        combined_patterns = {
+            "basic": basic_patterns,
+            "cross_instance": cross_pair_patterns
+        }
+
+        # 6. 对所有模式进行权重计算和排序
+        weighted_patterns = self._compute_pattern_weights(combined_patterns)
+
+        # 7. 保存关系库状态到文件（可选）
         if self.debug:
-            self._debug_save_json(self.common_patterns, "weighted_common_patterns")
-            self._debug_print(f"\n\ncommon_patterns: 找到 {len(self.common_patterns.get('shape_transformations', []))} 个加权共有形状变换模式")
-            self._debug_print(f"找到 {len(self.common_patterns.get('color_mappings', {}).get('mappings', {}))} 个加权共有颜色映射")
-            self._debug_print(f"找到 {len(self.common_patterns.get('position_changes', []))} 个加权共有位置变化模式")
+            relationship_libs.export_libraries_to_json(f"{self.debug_dir}/relationship_libraries.json")
+            self._debug_save_json(weighted_patterns, "weighted_patterns_from_libs")
 
-            # 输出新增的模式
-            if 'shape_color_rules' in self.common_patterns:
-                self._debug_print(f"找到 {len(self.common_patterns['shape_color_rules'])} 个形状-颜色规则模式")
-            if 'attribute_dependencies' in self.common_patterns:
-                self._debug_print(f"找到 {len(self.common_patterns['attribute_dependencies'])} 个属性依赖规则模式")
+        # 8. 返回带权重的模式
+        return weighted_patterns
 
-        return self.common_patterns
+    def _compute_pattern_weights(self, combined_patterns):
+        """
+        计算所有模式的权重并排序
+
+        Args:
+            combined_patterns: 组合的模式字典
+
+        Returns:
+            带权重的排序模式
+        """
+        # 提取所有模式到一个列表
+        all_patterns = []
+
+        # 处理基本模式
+        basic = combined_patterns.get("basic", {})
+
+        # 形状变换模式
+        for pattern in basic.get("shape_transformations", []):
+            all_patterns.append({
+                "type": "shape_transformation",
+                "source": "basic",
+                "data": pattern,
+                "confidence": pattern.get("confidence", 0.5),
+                "raw_weight": 1.0
+            })
+
+        # 颜色映射模式
+        for from_color, mapping in basic.get("color_mappings", {}).get("mappings", {}).items():
+            all_patterns.append({
+                "type": "color_mapping",
+                "source": "basic",
+                "data": {"from": from_color, "to": mapping.get("to_color")},
+                "confidence": mapping.get("confidence", 0.5),
+                "raw_weight": 1.0
+            })
+
+        # 位置变化模式
+        for pattern in basic.get("position_changes", []):
+            all_patterns.append({
+                "type": "position_change",
+                "source": "basic",
+                "data": pattern,
+                "confidence": pattern.get("confidence", 0.5),
+                "raw_weight": 1.0
+            })
+
+        # 处理跨实例模式
+        for pattern in combined_patterns.get("cross_instance", []):
+            pattern_type = pattern.get("type", "unknown")
+            subtype = pattern.get("subtype", "")
+
+            all_patterns.append({
+                "type": f"{pattern_type}_{subtype}" if subtype else pattern_type,
+                "source": "cross_instance",
+                "data": pattern,
+                "confidence": pattern.get("confidence", 0.5),
+                "raw_weight": pattern.get("weight", 1.0)
+            })
+
+        # 计算最终权重分数 (0.7 * confidence + 0.3 * raw_weight)
+        for pattern in all_patterns:
+            pattern["weight"] = 0.7 * pattern["confidence"] + 0.3 * pattern["raw_weight"]
+
+        # 按权重排序
+        all_patterns.sort(key=lambda x: x["weight"], reverse=True)
+
+        # 构建最终结果
+        result = {
+            "patterns": all_patterns,
+            "top_patterns": all_patterns[:min(10, len(all_patterns))],
+            "total_patterns": len(all_patterns),
+            "original": combined_patterns
+        }
+
+        return result
+
+
 
     def _induce_shape_color_patterns(self):
         """归纳形状-颜色规则模式"""
