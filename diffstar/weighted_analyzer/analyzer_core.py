@@ -562,6 +562,14 @@ class WeightedARCDiffAnalyzer(ARCDiffAnalyzer):
     将多维度关系库系统集成到ARC分析流程中的示例
     """
 
+    from .improved_analyze_common_patterns_with_weights import analyze_common_patterns_with_weights as  analyze_common_patterns_with_weights2
+
+    # def analyze_common_patterns_with_weights(self):
+    #     return analyze_common_patterns_with_weights(self)
+    analyze_common_patterns_with_weights3 = analyze_common_patterns_with_weights2
+
+
+
     def analyze_common_patterns_with_weights(self):
         """
         改进的版本：分析多对训练数据的共同模式，考虑权重因素，

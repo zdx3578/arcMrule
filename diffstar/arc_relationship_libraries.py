@@ -341,160 +341,298 @@ class ARCRelationshipLibraries:
 
     def _group_similar_objects(self):
         """将相似的对象分组"""
-        # 基于形状分组
-        grouped_by_shape = defaultdict(list)
+        if self.debug:
+            self.debug_print("开始对象分组...")
 
-        for shape_hash, objects in self.objects_by_shape.items():
-            if len(objects) >= 2:  # 只考虑至少出现两次的形状
-                grouped_by_shape[shape_hash] = objects
+        try:
+            # 基于形状分组
+            grouped_by_shape = defaultdict(list)
 
-        # 添加到相似对象分组
-        for shape_hash, objects in grouped_by_shape.items():
-            if len(objects) >= 2:
-                self.similar_objects_groups.append({
-                    "type": "shape_based",
-                    "shape_hash": shape_hash,
-                    "shape_library_key": shape_hash,
-                    "objects": objects,
-                    "count": len(objects)
-                })
+            for shape_hash, objects in self.objects_by_shape.items():
+                if len(objects) >= 2:  # 只考虑至少出现两次的形状
+                    grouped_by_shape[shape_hash] = objects
 
-        # 基于颜色和形状组合分组
-        grouped_by_color_shape = defaultdict(list)
+            # 添加到相似对象分组
+            for shape_hash, objects in grouped_by_shape.items():
+                if len(objects) >= 2:
+                    self.similar_objects_groups.append({
+                        "type": "shape_based",
+                        "shape_hash": shape_hash,
+                        "shape_library_key": shape_hash,
+                        "objects": objects,
+                        "count": len(objects)
+                    })
 
-        for pair_id, io_type, obj_id in [(p, io, o) for p_data in self.objects_by_pair.values()
-                                        for io in ["input", "output"]
-                                        for o in p_data[io]]:
-            # 获取对象的形状和颜色
-            shape_hash = None
-            color = None
+            if self.debug:
+                self.debug_print(f"已创建 {len(grouped_by_shape)} 个基于形状的分组")
 
-            # 查找形状
-            for sh, objects in self.objects_by_shape.items():
-                if (pair_id, io_type, obj_id) in objects:
-                    shape_hash = sh
-                    break
+            # 基于颜色和形状组合分组
+            grouped_by_color_shape = defaultdict(list)
 
-            # 查找颜色
-            for c, objects in self.objects_by_color.items():
-                if (pair_id, io_type, obj_id) in objects:
-                    color = c
-                    break
+            # 安全地构建所有对象的列表
+            all_objects = []
+            for pair_id, pair_data in self.objects_by_pair.items():
+                for io_type, obj_ids in pair_data.items():
+                    for obj_id in obj_ids:
+                        all_objects.append((pair_id, io_type, obj_id))
 
-            if shape_hash is not None and color is not None:
-                key = (shape_hash, color)
-                grouped_by_color_shape[key].append((pair_id, io_type, obj_id))
+            if self.debug:
+                self.debug_print(f"处理 {len(all_objects)} 个对象的颜色和形状分组")
 
-        # 添加到相似对象分组
-        for (shape_hash, color), objects in grouped_by_color_shape.items():
-            if len(objects) >= 2:
-                self.similar_objects_groups.append({
-                    "type": "shape_color_based",
-                    "shape_hash": shape_hash,
-                    "color": color,
-                    "objects": objects,
-                    "count": len(objects)
-                })
+            # 添加进度报告
+            total = len(all_objects)
+            for idx, (pair_id, io_type, obj_id) in enumerate(all_objects):
+                if self.debug and idx % 100 == 0 and idx > 0:
+                    self.debug_print(f"处理进度: {idx}/{total} ({idx/total*100:.1f}%)")
+
+                # 获取对象的形状和颜色
+                shape_hash = None
+                color = None
+
+                # 查找形状
+                for sh, objects in self.objects_by_shape.items():
+                    if (pair_id, io_type, obj_id) in objects:
+                        shape_hash = sh
+                        break
+
+                # 查找颜色
+                for c, objects in self.objects_by_color.items():
+                    if (pair_id, io_type, obj_id) in objects:
+                        color = c
+                        break
+
+                if shape_hash is not None and color is not None:
+                    key = (shape_hash, color)
+                    grouped_by_color_shape[key].append((pair_id, io_type, obj_id))
+
+            # 添加到相似对象分组
+            for (shape_hash, color), objects in grouped_by_color_shape.items():
+                if len(objects) >= 2:
+                    self.similar_objects_groups.append({
+                        "type": "shape_color_based",
+                        "shape_hash": shape_hash,
+                        "color": color,
+                        "objects": objects,
+                        "count": len(objects)
+                    })
+
+            if self.debug:
+                self.debug_print(f"已创建 {len(grouped_by_color_shape)} 个基于形状和颜色的分组")
+                self.debug_print(f"对象分组完成，总共 {len(self.similar_objects_groups)} 个分组")
+
+        except Exception as e:
+            if self.debug:
+                self.debug_print(f"对象分组时发生错误: {e}")
+                import traceback
+                self.debug_print(traceback.format_exc())
 
     def _analyze_attribute_correlations(self):
         """分析不同属性之间的相关性"""
-        # 对每个对象，记录其各种属性组合出现的频率
-        for pair_id, io_type, obj_id in [(p, io, o) for p_data in self.objects_by_pair.values()
-                                        for io in ["input", "output"]
-                                        for o in p_data[io]]:
-            # 获取对象的各种属性
-            attributes = {}
 
-            # 查找形状
-            for shape_hash, objects in self.objects_by_shape.items():
-                if (pair_id, io_type, obj_id) in objects:
-                    attributes["shape"] = shape_hash
-                    break
+        if self.debug:
+            self.debug_print("开始分析属性相关性...")
 
-            # 查找颜色
-            for color, objects in self.objects_by_color.items():
-                if (pair_id, io_type, obj_id) in objects:
-                    attributes["color"] = color
-                    break
+        try:
+            # 收集所有对象
+            all_objects = []
+            for pair_id, pair_data in self.objects_by_pair.items():
+                for io_type, obj_ids in pair_data.items():
+                    for obj_id in obj_ids:
+                        all_objects.append((pair_id, io_type, obj_id))
 
-            # 查找大小
-            for size, objects in self.objects_by_size.items():
-                if (pair_id, io_type, obj_id) in objects:
-                    attributes["size"] = size
-                    break
+            total_objects = len(all_objects)
+            if self.debug:
+                self.debug_print(f"找到 {total_objects} 个对象需要分析")
 
-            # 查找操作类型
-            operation_type = None
+            # 创建操作类型查找索引，提高性能
+            removed_index = {(p, o): True for p, o, _ in self.removed_objects}
+            added_index = {(p, o): True for p, o, _ in self.added_objects}
+            preserved_in_index = {(p, i_o): o_o for p, i_o, o_o in self.preserved_objects}
+            preserved_out_index = {(p, o_o): i_o for p, i_o, o_o in self.preserved_objects}
+            transformed_in_index = {(p, i_o): o_o for p, i_o, o_o, _ in self.transformed_objects}
+            transformed_out_index = {(p, o_o): i_o for p, i_o, o_o, _ in self.transformed_objects}
 
-            # 检查是否被移除
-            for p, o, _ in self.removed_objects:
-                if p == pair_id and o == obj_id:
-                    operation_type = "removed"
-                    break
+            # 处理计数器
+            processed = 0
 
-            # 检查是否被添加
-            if operation_type is None:
-                for p, o, _ in self.added_objects:
-                    if p == pair_id and o == obj_id:
-                        operation_type = "added"
+            # 对每个对象，分析属性关系
+            for pair_id, io_type, obj_id in all_objects:
+                processed += 1
+                if self.debug and processed % 1000 == 0:
+                    self.debug_print(f"已处理: {processed}/{total_objects} ({processed/total_objects*100:.1f}%)")
+
+                # 获取对象的各种属性
+                attributes = {}
+
+                # 查找形状 (优化: 直接从形状库中查找)
+                for shape_hash, objects in self.objects_by_shape.items():
+                    if (pair_id, io_type, obj_id) in objects:
+                        attributes["shape"] = shape_hash
                         break
 
-            # 检查是否被保留
-            if operation_type is None:
-                for p, i_o, o_o in self.preserved_objects:
-                    if p == pair_id and (i_o == obj_id or o_o == obj_id):
+                # 查找颜色
+                for color, objects in self.objects_by_color.items():
+                    if (pair_id, io_type, obj_id) in objects:
+                        attributes["color"] = color
+                        break
+
+                # 查找大小
+                for size, objects in self.objects_by_size.items():
+                    if (pair_id, io_type, obj_id) in objects:
+                        attributes["size"] = size
+                        break
+
+                # 使用索引快速查找操作类型
+                operation_type = None
+                obj_key = (pair_id, obj_id)
+
+                if io_type == "input":
+                    if obj_key in removed_index:
+                        operation_type = "removed"
+                    elif obj_key in preserved_in_index:
                         operation_type = "preserved"
-                        break
-
-            # 检查是否被变换
-            if operation_type is None:
-                for p, i_o, o_o, _ in self.transformed_objects:
-                    if p == pair_id and (i_o == obj_id or o_o == obj_id):
+                    elif obj_key in transformed_in_index:
                         operation_type = "transformed"
-                        break
+                elif io_type == "output":
+                    if obj_key in added_index:
+                        operation_type = "added"
+                    elif obj_key in preserved_out_index:
+                        operation_type = "preserved_result"
+                    elif obj_key in transformed_out_index:
+                        operation_type = "transformed_result"
 
-            if operation_type:
-                attributes["operation"] = operation_type
+                if operation_type:
+                    attributes["operation"] = operation_type
 
-            # 记录属性相关性
-            attribs = list(attributes.items())
-            for i, (attr1, val1) in enumerate(attribs):
-                for attr2, val2 in attribs[i+1:]:
-                    self.attribute_correlations[(attr1, val1)][(attr2, val2)] += 1
-                    self.attribute_correlations[(attr2, val2)][(attr1, val1)] += 1
+                # 记录属性相关性
+                attribs = list(attributes.items())
+                for i, (attr1, val1) in enumerate(attribs):
+                    for attr2, val2 in attribs[i+1:]:
+                        self.attribute_correlations[(attr1, val1)][(attr2, val2)] += 1
+                        self.attribute_correlations[(attr2, val2)][(attr1, val1)] += 1
+
+            if self.debug:
+                correlation_count = sum(len(corrs) for corrs in self.attribute_correlations.values())
+                self.debug_print(f"属性相关性分析完成，共发现 {correlation_count} 个属性相关")
+
+        except Exception as e:
+            if self.debug:
+                self.debug_print(f"分析属性相关性时出错: {str(e)}")
+                import traceback
+                self.debug_print(traceback.format_exc())
+
+
+
 
     def _calculate_statistics(self):
         """计算库统计数据"""
-        # 计算每个数据对的平均对象数
-        if self.total_pairs > 0:
-            total_objects = sum(len(data["input"]) + len(data["output"])
-                              for data in self.objects_by_pair.values())
-            self.statistics["objects_per_pair_avg"] = total_objects / (self.total_pairs * 2)  # 输入+输出
+        try:
+            if self.debug:
+                self.debug_print("开始计算统计数据...")
 
-        # 最常见的形状
-        shapes_by_freq = sorted(
-            [(sh, data["count"]) for sh, data in self.shape_library.items()],
-            key=lambda x: x[1],
-            reverse=True
-        )
-        self.statistics["most_common_shapes"] = shapes_by_freq[:10]  # 前10个
+            # 计算每个数据对的平均对象数
+            if self.total_pairs > 0:
+                # 首先检查 objects_by_pair 的结构
+                if self.debug:
+                    pair_ids = list(self.objects_by_pair.keys())
+                    if pair_ids:
+                        first_pair_id = pair_ids[0]
+                        sample_value = self.objects_by_pair[first_pair_id]
+                        self.debug_print(f"objects_by_pair 样本值类型: {type(sample_value)}")
+                        if hasattr(sample_value, '__iter__'):
+                            self.debug_print(f"样本值内容: {sample_value}")
 
-        # 最常见的颜色
-        colors_by_freq = sorted(
-            [(c, data["count"]) for c, data in self.color_library.items()],
-            key=lambda x: x[1],
-            reverse=True
-        )
-        self.statistics["most_common_colors"] = colors_by_freq[:10]  # 前10个
+                total_objects = 0
+                for pair_id, pair_data in self.objects_by_pair.items():
+                    # 确保 pair_data 是字典
+                    if isinstance(pair_data, dict):
+                        # 正确处理字典值
+                        for io_type in ["input", "output", "diff_in", "diff_out"]:
+                            if io_type in pair_data:
+                                total_objects += len(pair_data[io_type])
+                    else:
+                        # 如果不是字典，尝试其他方式处理
+                        if self.debug:
+                            self.debug_print(f"警告: pair_id={pair_id} 的值类型为 {type(pair_data)}，而不是字典")
 
-        # 操作统计
-        operations = {
-            "removed": len(self.removed_objects),
-            "added": len(self.added_objects),
-            "preserved": len(self.preserved_objects),
-            "transformed": len(self.transformed_objects)
-        }
-        self.statistics["most_common_operations"] = operations
+                        # 尝试将它作为包含键值对的元组或列表处理
+                        try:
+                            if isinstance(pair_data, (tuple, list)) and len(pair_data) >= 2:
+                                # 可能是 (key, value) 格式
+                                for item in pair_data:
+                                    if isinstance(item, (tuple, list)) and len(item) >= 2:
+                                        key, objs = item[0], item[1]
+                                        if key in ["input", "output", "diff_in", "diff_out"] and hasattr(objs, '__len__'):
+                                            total_objects += len(objs)
+                        except Exception as e:
+                            if self.debug:
+                                self.debug_print(f"尝试处理pair_data时出错: {e}")
+
+                # 避免除零错误
+                if self.total_pairs > 0:
+                    self.statistics["objects_per_pair_avg"] = total_objects / (self.total_pairs * 2)
+                else:
+                    self.statistics["objects_per_pair_avg"] = 0
+
+                if self.debug:
+                    self.debug_print(f"计算得到总对象数: {total_objects}, 平均每对: {self.statistics['objects_per_pair_avg']:.2f}")
+
+            # 最常见的形状
+            try:
+                shapes_by_freq = sorted(
+                    [(sh, data["count"]) for sh, data in self.shape_library.items()],
+                    key=lambda x: x[1],
+                    reverse=True
+                )
+                self.statistics["most_common_shapes"] = shapes_by_freq[:10]  # 前10个
+            except Exception as e:
+                if self.debug:
+                    self.debug_print(f"计算最常见形状时出错: {e}")
+                self.statistics["most_common_shapes"] = []
+
+            # 最常见的颜色
+            try:
+                colors_by_freq = sorted(
+                    [(c, data["count"]) for c, data in self.color_library.items()],
+                    key=lambda x: x[1],
+                    reverse=True
+                )
+                self.statistics["most_common_colors"] = colors_by_freq[:10]  # 前10个
+            except Exception as e:
+                if self.debug:
+                    self.debug_print(f"计算最常见颜色时出错: {e}")
+                self.statistics["most_common_colors"] = []
+
+            # 操作统计
+            operations = {
+                "removed": len(self.removed_objects),
+                "added": len(self.added_objects),
+                "preserved": len(self.preserved_objects),
+                "transformed": len(self.transformed_objects)
+            }
+            self.statistics["most_common_operations"] = operations
+
+            if self.debug:
+                self.debug_print("统计数据计算完成")
+
+        except Exception as e:
+            if self.debug:
+                self.debug_print(f"计算统计数据时出现错误: {e}")
+                import traceback
+                self.debug_print(traceback.format_exc())
+
+            # 设置默认统计值
+            self.statistics = {
+                "objects_per_pair_avg": 0,
+                "most_common_shapes": [],
+                "most_common_colors": [],
+                "most_common_operations": {
+                    "removed": 0,
+                    "added": 0,
+                    "preserved": 0,
+                    "transformed": 0
+                }
+            }
 
     def _log_library_statistics(self):
         """输出库统计数据"""
