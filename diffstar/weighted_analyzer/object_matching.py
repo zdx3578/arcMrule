@@ -81,82 +81,83 @@ class ObjectMatcher:
         if self.debug_print:
             self.debug_print(f"找到 {len(object_mappings)} 个基于形状和权重的对象匹配")
 
-        # 分析每个映射的变换
-        for in_obj, out_obj, match_info in object_mappings:
-            # 分析颜色变换
-            color_transformation = in_obj.get_color_transformation(out_obj)
+        # # 分析每个映射的变换
+        # for in_obj, out_obj, match_info in object_mappings:
+        #     # 分析颜色变换
+        #     color_transformation = in_obj.get_color_transformation(out_obj)
 
-            # 分析位置变换
-            position_change = in_obj.get_positional_change(out_obj)
+        #     # 分析位置变换
+        #     position_change = in_obj.get_positional_change(out_obj)
 
-            # 添加到映射规则
-            mapping_rule["Rule_object_mappings"].append({
-                "diff_in_object": in_obj.to_dict(),
-                "diff_out_object": out_obj.to_dict(),
-                "match_info": match_info,
-                "weight_product": in_obj.obj_weight * out_obj.obj_weight  # 添加权重乘积作为匹配强度
-            })
+        #     # 添加到映射规则
+        #     mapping_rule["Rule_object_mappings"].append({
+        #         "diff_in_object": in_obj.to_dict(),
+        #         "diff_out_object": out_obj.to_dict(),
+        #         "match_info": match_info,
+        #         "weight_product": in_obj.obj_weight * out_obj.obj_weight  # 添加权重乘积作为匹配强度
+        #     })
 
-            # 记录形状变换
-            mapping_rule["Rule_shape_transformations"].append({
-                "in_obj_id": in_obj.obj_id,
-                "out_obj_id": out_obj.obj_id,
-                "transform_type": match_info["transform_type"],
-                "transform_name": match_info["transform_name"],
-                "confidence": match_info["confidence"],
-                "weight_in": in_obj.obj_weight,
-                "weight_out": out_obj.obj_weight
-            })
+        #     # 记录形状变换
+        #     mapping_rule["Rule_shape_transformations"].append({
+        #         "in_obj_id": in_obj.obj_id,
+        #         "out_obj_id": out_obj.obj_id,
+        #         "transform_type": match_info["transform_type"],
+        #         "transform_name": match_info["transform_name"],
+        #         "confidence": match_info["confidence"],
+        #         "weight_in": in_obj.obj_weight,
+        #         "weight_out": out_obj.obj_weight
+        #     })
 
-            # 记录颜色映射
-            if color_transformation and color_transformation.get("color_mapping"):
-                for from_color, to_color in color_transformation["color_mapping"].items():
-                    if from_color not in mapping_rule["Rule_color_mappings"]:
-                        mapping_rule["Rule_color_mappings"][from_color] = {
-                            "to_color": to_color,
-                            "weight": in_obj.obj_weight,  # 使用输入对象权重作为颜色映射权重
-                            "in_obj_id": in_obj.obj_id,   # 添加输入对象ID
-                            "out_obj_id": out_obj.obj_id  # 添加输出对象ID
-                        }
-                    elif in_obj.obj_weight > mapping_rule["Rule_color_mappings"][from_color]["weight"]:
-                        # 如果当前对象权重更高，更新颜色映射
-                        mapping_rule["Rule_color_mappings"][from_color] = {
-                            "to_color": to_color,
-                            "weight": in_obj.obj_weight,
-                            "in_obj_id": in_obj.obj_id,   # 添加输入对象ID
-                            "out_obj_id": out_obj.obj_id  # 添加输出对象ID
-                        }
+        #     # 记录颜色映射
+        #     if color_transformation and color_transformation.get("color_mapping"):
+        #         for from_color, to_color in color_transformation["color_mapping"].items():
+        #             if from_color not in mapping_rule["Rule_color_mappings"]:
+        #                 mapping_rule["Rule_color_mappings"][from_color] = {
+        #                     "to_color": to_color,
+        #                     "weight": in_obj.obj_weight,  # 使用输入对象权重作为颜色映射权重
+        #                     "in_obj_id": in_obj.obj_id,   # 添加输入对象ID
+        #                     "out_obj_id": out_obj.obj_id  # 添加输出对象ID
+        #                 }
+        #             elif in_obj.obj_weight > mapping_rule["Rule_color_mappings"][from_color]["weight"]:
+        #                 # 如果当前对象权重更高，更新颜色映射
+        #                 mapping_rule["Rule_color_mappings"][from_color] = {
+        #                     "to_color": to_color,
+        #                     "weight": in_obj.obj_weight,
+        #                     "in_obj_id": in_obj.obj_id,   # 添加输入对象ID
+        #                     "out_obj_id": out_obj.obj_id  # 添加输出对象ID
+        #                 }
 
-            # 记录位置变化
-            mapping_rule["position_changes"].append({
-                "in_obj_id": in_obj.obj_id,
-                "out_obj_id": out_obj.obj_id,
-                "delta_row": position_change["delta_row"],
-                "delta_col": position_change["delta_col"],
-                "direction": position_change.get("direction"),
-                "orientation": position_change.get("orientation"),
-                "weight_in": in_obj.obj_weight,
-                "weight_out": out_obj.obj_weight
-            })
+        #     # 记录位置变化
+        #     mapping_rule["position_changes"].append({
+        #         "in_obj_id": in_obj.obj_id,
+        #         "out_obj_id": out_obj.obj_id,
+        #         "delta_row": position_change["delta_row"],
+        #         "delta_col": position_change["delta_col"],
+        #         "direction": position_change.get("direction"),
+        #         "orientation": position_change.get("orientation"),
+        #         "weight_in": in_obj.obj_weight,
+        #         "weight_out": out_obj.obj_weight
+        #     })
 
-            # 创建组合变换记录
-            combined_transform = {
-                "in_obj_id": in_obj.obj_id,
-                "out_obj_id": out_obj.obj_id,
-                "shape_transform": {
-                    "transform_type": match_info["transform_type"],
-                    "transform_name": match_info["transform_name"],
-                },
-                "position_change": position_change,
-                "color_change": color_transformation.get("color_mapping", {}),
-                "weight_score": in_obj.obj_weight * out_obj.obj_weight,
-                "confidence": match_info["confidence"],
-                # 记录对象的原始上下文信息
-                "original_context": self._capture_object_context(in_obj, input_grid),
-                "transformed_context": self._capture_object_context(out_obj, output_grid)
-            }
+        #     # 创建组合变换记录
+        #     combined_transform = {
+        #         "in_obj_id": in_obj.obj_id,
+        #         "out_obj_id": out_obj.obj_id,
+        #         "shape_transform": {
+        #             "transform_type": match_info["transform_type"],
+        #             "transform_name": match_info["transform_name"],
+        #         },
+        #         "position_change": position_change,
+        #         "color_change": color_transformation.get("color_mapping", {}),
+        #         "weight_score": in_obj.obj_weight * out_obj.obj_weight,
+        #         "confidence": match_info["confidence"],
+        #         # 记录对象的原始上下文信息
+        #         "original_context": self._capture_object_context(in_obj, input_grid),
+        #         "transformed_context": self._capture_object_context(out_obj, output_grid)
+        #     }
 
-            mapping_rule["combined_transformations"].append(combined_transform)
+        #     mapping_rule["combined_transformations"].append(combined_transform)
+
 
         transformation_rule = self._analyze_input_to_output_transformation(
             pair_id, input_grid, output_grid,

@@ -214,19 +214,19 @@ class WeightedARCDiffAnalyzer(ARCDiffAnalyzer):
 
         self.mapping_rules.append(mapping_rule)
 
-        # 新增: 提取基于形状的颜色变化规则
-        shape_color_rule = self._extract_shape_color_rules(
-            pair_id, input_obj_infos, output_obj_infos,
-            diff_in_obj_infos, diff_out_obj_infos
-        )
-        if shape_color_rule:
-            self.mapping_rules.append(shape_color_rule)
+        # # 新增: 提取基于形状的颜色变化规则
+        # shape_color_rule = self._extract_shape_color_rules(
+        #     pair_id, input_obj_infos, output_obj_infos,
+        #     diff_in_obj_infos, diff_out_obj_infos
+        # )
+        # if shape_color_rule:
+        #     self.mapping_rules.append(shape_color_rule)
 
-        # 新增: 提取更通用的属性依赖规则
-        attr_rules = self._extract_attribute_dependency_rules(
-            pair_id, input_obj_infos, output_obj_infos
-        )
-        self.mapping_rules.extend(attr_rules)
+        # # 新增: 提取更通用的属性依赖规则
+        # attr_rules = self._extract_attribute_dependency_rules(
+        #     pair_id, input_obj_infos, output_obj_infos
+        # )
+        # self.mapping_rules.extend(attr_rules)
 
 
         if self.debug:
@@ -237,13 +237,13 @@ class WeightedARCDiffAnalyzer(ARCDiffAnalyzer):
             self._debug_print_object_weights(diff_in_obj_infos, f"diff_in_obj_weights_{pair_id}")
             self._debug_print_object_weights(diff_out_obj_infos, f"diff_out_obj_weights_{pair_id}")
 
-            if shape_color_rule:
-                self._debug_save_json(shape_color_rule, f"shape_color_rule_{pair_id}")
-                self._debug_print(f"提取了 {len(shape_color_rule.get('rules', []))} 个形状-颜色规则")
+            # if shape_color_rule:
+            #     self._debug_save_json(shape_color_rule, f"shape_color_rule_{pair_id}")
+            #     self._debug_print(f"提取了 {len(shape_color_rule.get('rules', []))} 个形状-颜色规则")
 
-            if attr_rules:
-                self._debug_save_json(attr_rules, f"attr_dependency_rules_{pair_id}")
-                self._debug_print(f"提取了 {len(attr_rules)} 个属性依赖规则")
+            # if attr_rules:
+            #     self._debug_save_json(attr_rules, f"attr_dependency_rules_{pair_id}")
+            #     self._debug_print(f"提取了 {len(attr_rules)} 个属性依赖规则")
 
     def _extract_shape_color_rules(self, pair_id, input_obj_infos, output_obj_infos,
                                 diff_in_obj_infos, diff_out_obj_infos):
