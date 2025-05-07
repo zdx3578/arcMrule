@@ -330,7 +330,18 @@ class WeightedARCSolver:
                 self.diff_analyzer.add_train_pair(i, input_grid, output_grid, param, background_color)
 
             # 分析共有模式（使用带权重的版本）
-            common_patterns = self.diff_analyzer.analyze_common_patterns_with_weights()
+            # common_patterns = self.diff_analyzer.analyze_common_patterns_with_weights()
+
+            # pattern_results = self.diff_analyzer.enhanced_analyze_common_patterns_with_weights()
+            # # 提取高级规则
+            # high_level_rules = pattern_results.get('high_level_rules', [])
+
+            common_patterns = self.diff_analyzer.enhanced_analyze_common_patterns_with_test_data_matching(task)
+
+
+
+
+
 
             # 处理测试数据
             test_predictions = []

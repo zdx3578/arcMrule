@@ -562,11 +562,356 @@ class WeightedARCDiffAnalyzer(ARCDiffAnalyzer):
     将多维度关系库系统集成到ARC分析流程中的示例
     """
 
-    from .improved_analyze_common_patterns_with_weights import analyze_common_patterns_with_weights as  analyze_common_patterns_with_weights2
+    # from .improved_analyze_common_patterns_with_weights import analyze_common_patterns_with_weights as  analyze_common_patterns_with_weights2
 
-    # def analyze_common_patterns_with_weights(self):
-    #     return analyze_common_patterns_with_weights(self)
-    analyze_common_patterns_with_weights3 = analyze_common_patterns_with_weights2
+    # # def analyze_common_patterns_with_weights(self):
+    # #     return analyze_common_patterns_with_weights(self)
+    # analyze_common_patterns_with_weights3 = analyze_common_patterns_with_weights2
+
+
+    """
+    增强的ARC分析流程：集成测试形状匹配和组合规则提取
+    """
+
+    def enhanced_analyze_common_patterns_with_test_data_matching(self, task=None):
+        """
+        增强的模式分析函数：将测试数据与模式库进行匹配
+
+        Args:
+            task: 可选的测试输入数据
+
+        Returns:
+            带权重的通用模式和针对测试数据的优化规则
+        """
+        if not self.mapping_rules:
+            return {}
+
+        # 1. 初始化并构建关系库
+        from arc_relationship_libraries import ARCRelationshipLibraries
+        relationship_libs = ARCRelationshipLibraries(debug=self.debug, debug_print=self._debug_print)
+        relationship_libs.build_libraries_from_data(self.mapping_rules, self.all_objects)
+
+        # 2. 查找跨数据对模式
+        cross_pair_patterns = relationship_libs.find_patterns_across_pairs()
+
+        # test_input = task
+        for i, example in enumerate(task['test']):
+                if self.debug:
+                    print(f"\n----- 测试样例 {i+1} -----")
+                test_input = example['input']
+
+        # 3. 提取测试输入的形状和颜色特征
+        test_features = None
+        if test_input:
+            test_features = self._extract_test_features(test_input)
+            if self.debug:
+                self._debug_print("从测试输入提取特征:")
+                if test_features.get('shapes'):
+                    self._debug_print(f"  - 发现 {len(test_features['shapes'])} 个形状")
+                if test_features.get('colors'):
+                    self._debug_print(f"  - 发现颜色: {test_features['colors']}")
+
+        # 4. 使用增强版模式学习器提取规则并匹配测试数据
+        from enhanced_pattern_meta_analyzer import EnhancedPatternMetaAnalyzer
+        meta_analyzer = EnhancedPatternMetaAnalyzer(debug=self.debug, debug_print=self._debug_print)
+        advanced_rules = meta_analyzer.process_patterns(cross_pair_patterns, test_features)
+
+        # 5. 调用原始模式分析器获取基本模式
+        basic_patterns = self.pattern_analyzer.analyze_common_patterns(self.mapping_rules)
+
+        # 6. 组合所有结果
+        combined_results = {
+            "basic_patterns": basic_patterns,
+            "cross_pair_patterns": cross_pair_patterns,
+            "advanced_rules": advanced_rules
+        }
+
+        if test_features:
+            combined_results["test_features"] = test_features
+
+            # 7. 生成针对测试数据的优化应用计划
+            optimized_plan = self._generate_optimized_plan(
+                basic_patterns, cross_pair_patterns, advanced_rules, test_features)
+
+            combined_results["optimized_plan"] = optimized_plan
+
+        # 8. 保存结果（可选）
+        if self.debug:
+            self._debug_save_json(advanced_rules, "advanced_rules_with_test_matching")
+            if test_features:
+                self._debug_save_json(test_features, "test_features")
+                self._debug_save_json(combined_results.get("optimized_plan", {}), "optimized_application_plan")
+
+        return combined_results
+
+    def _extract_test_features(self, test_input):
+        """
+        从测试输入中提取形状和颜色特征
+
+        Args:
+            test_input: 测试输入数据
+
+        Returns:
+            包含形状和颜色信息的特征字典
+        """
+        features = {
+            'shapes': [],
+            'colors': set(),
+            'objects': []
+        }
+
+        # 提取形状和颜色的逻辑，需要根据实际数据结构调整
+        # 例如，对于网格数据:
+
+        # 1. 提取颜色 (非零值)
+        if isinstance(test_input, list) or isinstance(test_input, tuple):
+            for row in test_input:
+                for cell in row:
+                    if cell != 0:  # 假设0是背景色
+                        features['colors'].add(cell)
+
+        # 2. 提取对象，这需要使用现有的对象提取函数
+        objects = self._extract_objects_from_grid(test_input)
+        features['objects'] = objects
+
+        # 3. 从对象计算形状哈希
+        for obj in objects:
+            shape_hash = self._calculate_shape_hash(obj)
+            if shape_hash:
+                features['shapes'].append(shape_hash)
+
+        # 确保颜色是列表而非集合，以便序列化
+        features['colors'] = list(features['colors'])
+
+        return features
+
+    def _generate_optimized_plan(self, basic_patterns, cross_patterns, advanced_rules, test_features):
+        """
+        生成针对测试数据的优化应用计划
+
+        Args:
+            basic_patterns: 基本模式
+            cross_patterns: 跨对模式
+            advanced_rules: 高级规则
+            test_features: 测试特征
+
+        Returns:
+            优化的应用计划
+        """
+        # 获取推荐执行计划
+        execution_plan = advanced_rules.get('recommended_execution_plan', [])
+
+        if not execution_plan:
+            return {"message": "无法生成优化计划，未找到匹配的规则"}
+
+        # 创建应用计划
+        application_plan = {
+            "steps": [],
+            "matched_test_features": {
+                "shapes": [],
+                "colors": []
+            }
+        }
+
+        # 添加匹配的形状和颜色
+        for step in execution_plan:
+            match_info = step.get('match_info', {})
+            elements = match_info.get('matched_elements', {})
+
+            if isinstance(elements, dict) and 'shape' in elements:
+                application_plan['matched_test_features']['shapes'].append(elements['shape'])
+            if isinstance(elements, dict) and 'color' in elements:
+                application_plan['matched_test_features']['colors'].append(elements['color'])
+            if isinstance(elements, list):
+                for elem in elements:
+                    if isinstance(elem, (int, str)):  # 如果是简单类型，假设是颜色
+                        application_plan['matched_test_features']['colors'].append(elem)
+
+        # 去重
+        application_plan['matched_test_features']['shapes'] = list(set(application_plan['matched_test_features']['shapes']))
+        application_plan['matched_test_features']['colors'] = list(set(application_plan['matched_test_features']['colors']))
+
+        # 构建应用步骤
+        for idx, step in enumerate(execution_plan):
+            step_info = {
+                "step_id": idx + 1,
+                "step_type": step['step_type'],
+                "priority": step['priority']
+            }
+
+            # 根据规则类型添加具体操作
+            rule = step.get('rule', {})
+            if rule.get('rule_type') == 'composite_rule':
+                step_info["action"] = {
+                    "base_operation": {
+                        "type": rule['base_rule'].get('type'),
+                        "color": rule['base_rule'].get('color'),
+                        "operation": rule['base_rule'].get('operation')
+                    },
+                    "conditional_changes": []
+                }
+
+                # 添加条件变化
+                for cond in rule.get('conditional_rules', []):
+                    step_info["action"]["conditional_changes"].append({
+                        "when_remove_shape": cond['condition'].get('shape_hash'),
+                        "color_change": {
+                            "from": cond['effect']['from_color'],
+                            "to": cond['effect']['to_color']
+                        }
+                    })
+
+            elif rule.get('rule_type') == 'conditional_color_change':
+                step_info["action"] = {
+                    "when_remove_shape": rule['condition'].get('shape_hash'),
+                    "color_change": {
+                        "from": rule['effect']['from_color'],
+                        "to": rule['effect']['to_color']
+                    }
+                }
+
+            elif rule.get('rule_type') == 'global_color_operation':
+                step_info["action"] = {
+                    "apply_to_color": rule.get('color'),
+                    "operation": rule.get('operation')
+                }
+
+            application_plan["steps"].append(step_info)
+
+        return application_plan
+
+    # def _extract_objects_from_grid(self, grid):
+    #     """从网格中提取对象"""
+    #     # 实现对象提取逻辑，可以使用现有的对象提取函数
+    #     # 这是一个简化版本
+    #     objects = []
+    #     # ... 对象提取代码 ...
+    #     return objects
+
+    # def _calculate_shape_hash(self, obj):
+    #     """计算对象的形状哈希"""
+    #     # 实现形状哈希计算逻辑
+    #     # 这是一个简化版本
+    #     shape_hash = None
+    #     # ... 形状哈希计算代码 ...
+    #     return shape_hash
+
+
+
+
+
+
+    """
+    集成高级模式学习器到ARC分析流程
+    """
+
+    def enhanced_analyze_common_patterns_with_weights(self):
+        """
+        增强版分析函数：整合多维度关系库和高级模式学习器
+
+        Returns:
+            带权重的通用模式与高级规则
+        """
+        if not self.mapping_rules:
+            return {}
+
+        # 1. 初始化多维度关系库系统
+        from arc_relationship_libraries import ARCRelationshipLibraries
+        relationship_libs = ARCRelationshipLibraries(debug=self.debug, debug_print=self._debug_print)
+
+        # 2. 构建关系库
+        relationship_libs.build_libraries_from_data(self.mapping_rules, self.all_objects)
+
+        # 3. 查找跨数据对的模式
+        cross_pair_patterns = relationship_libs.find_patterns_across_pairs()
+
+        # 4. 使用高级模式学习器提取通用规则
+        from pattern_meta_analyzer import PatternMetaAnalyzer
+        meta_analyzer = PatternMetaAnalyzer(debug=self.debug, debug_print=self._debug_print)
+        high_level_rules = meta_analyzer.process_patterns(cross_pair_patterns)
+
+        # 5. 调用原始的模式分析器获取基本模式
+        # basic_patterns = self.pattern_analyzer.analyze_common_patterns(self.mapping_rules)
+
+        # 6. 结合基本模式、跨数据对模式和高级规则
+        combined_patterns = {
+            # "basic": basic_patterns,
+            "cross_instance": cross_pair_patterns,
+            "high_level_rules": high_level_rules
+        }
+
+        # 7. 对所有模式和规则进行权重计算和排序
+        weighted_patterns = self._compute_enhanced_pattern_weights(combined_patterns)
+
+        # 8. 保存关系库状态和高级规则到文件（可选）
+        if self.debug:
+            relationship_libs.export_libraries_to_json(f"{self.debug_dir}/relationship_libraries.json")
+            self._debug_save_json(high_level_rules, "high_level_rules")
+            self._debug_save_json(weighted_patterns, "weighted_patterns_enhanced")
+
+        # 9. 返回带权重的模式和规则
+        return weighted_patterns
+
+    def _compute_enhanced_pattern_weights(self, combined_patterns):
+        """
+        计算增强版的模式权重，包含高级规则
+
+        Args:
+            combined_patterns: 组合的模式字典
+
+        Returns:
+            带权重的排序模式和规则
+        """
+        # 提取所有模式和规则到一个列表
+        all_patterns_and_rules = []
+
+        # 处理基本模式
+        basic = combined_patterns.get("basic", {})
+        # [基本模式处理逻辑...]
+
+        # 处理跨实例模式
+        for pattern in combined_patterns.get("cross_instance", []):
+            pattern_type = pattern.get("type", "unknown")
+            subtype = pattern.get("subtype", "")
+
+            all_patterns_and_rules.append({
+                "type": f"{pattern_type}_{subtype}" if subtype else pattern_type,
+                "source": "cross_instance",
+                "data": pattern,
+                "confidence": pattern.get("confidence", 0.5),
+                "raw_weight": pattern.get("weight", 1.0)
+            })
+
+        # 处理高级规则，给予更高的权重
+        for rule in combined_patterns.get("high_level_rules", []):
+            rule_type = rule.get("rule_type", "unknown")
+
+            all_patterns_and_rules.append({
+                "type": rule_type,
+                "source": "high_level_rule",
+                "data": rule,
+                "confidence": rule.get("confidence", 0.5),
+                "raw_weight": rule.get("score", 1.0) * 1.2  # 高级规则权重增加20%
+            })
+
+        # 计算最终权重分数 (0.7 * confidence + 0.3 * raw_weight)
+        for item in all_patterns_and_rules:
+            item["weight"] = 0.7 * item["confidence"] + 0.3 * item["raw_weight"]
+
+        # 按权重排序
+        all_patterns_and_rules.sort(key=lambda x: x["weight"], reverse=True)
+
+        # 构建最终结果
+        result = {
+            "patterns_and_rules": all_patterns_and_rules,
+            "top_items": all_patterns_and_rules[:min(10, len(all_patterns_and_rules))],
+            "total_items": len(all_patterns_and_rules),
+            "original": combined_patterns
+        }
+
+        return result
+
+
 
 
 
