@@ -578,6 +578,7 @@ class WeightedARCDiffAnalyzer(ARCDiffAnalyzer):
         Returns:
             带权重的共同模式字典
         """
+        print("\n\n\n\nCOMMON ommon_patterns_with_weights开始分析共同模式\n\n")
         if not self.mapping_rules:
             return {}
 
@@ -592,21 +593,24 @@ class WeightedARCDiffAnalyzer(ARCDiffAnalyzer):
         cross_pair_patterns = relationship_libs.find_patterns_across_pairs()
 
         # 4. 调用原始的模式分析器获取基本模式
-        basic_patterns = self.pattern_analyzer.analyze_common_patterns(self.mapping_rules)
+        # basic_patterns = self.pattern_analyzer.analyze_common_patterns(self.mapping_rules)
 
         # 5. 结合基本模式和跨数据对模式
         combined_patterns = {
-            "basic": basic_patterns,
+            # "basic": basic_patterns,
             "cross_instance": cross_pair_patterns
         }
 
         # 6. 对所有模式进行权重计算和排序
         weighted_patterns = self._compute_pattern_weights(combined_patterns)
+        patterup2 = uppatter2(combined_patterns)
 
         # 7. 保存关系库状态到文件（可选）
         if self.debug:
             relationship_libs.export_libraries_to_json(f"{self.debug_dir}/relationship_libraries.json")
             self._debug_save_json(weighted_patterns, "weighted_patterns_from_libs")
+            print(f"weighted_patterns")
+            print(weighted_patterns)
 
         # 8. 返回带权重的模式
         return weighted_patterns

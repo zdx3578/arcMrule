@@ -22,6 +22,7 @@ class ARCRelationshipLibraries:
         """
         self.debug = debug
         self.debug_print = debug_print
+        self._cached_all_objects = None  # 添加缓存属性
 
         # 基础属性库
         self.shape_library = {}  # shape_hash -> {详细信息}
@@ -73,7 +74,9 @@ class ARCRelationshipLibraries:
 
     def reset(self):
         """重置所有库"""
+        self._cached_all_objects = None  # 清除缓存
         self.__init__(self.debug, self.debug_print)
+        # self._cached_all_objects = None  # 清除缓存
 
     def build_libraries_from_data(self, mapping_rules, all_objects):
         """
@@ -339,6 +342,27 @@ class ARCRelationshipLibraries:
                         }
                         self.color_transformation_rules.append(rule)
 
+    def _get_all_objects(self):
+        """获取所有对象，使用缓存避免重复计算"""
+        # 如果缓存不存在，则计算并缓存
+        if self._cached_all_objects is None:
+            if self.debug:
+                self.debug_print("首次构建所有对象列表...")
+
+            self._cached_all_objects = []
+            for pair_id, pair_data in self.objects_by_pair.items():
+                for io_type, obj_ids in pair_data.items():
+                    for obj_id in obj_ids:
+                        self._cached_all_objects.append((pair_id, io_type, obj_id))
+
+            if self.debug:
+                self.debug_print(f"共收集到 {len(self._cached_all_objects)} 个对象")
+        else:
+            if self.debug:
+                self.debug_print(f"使用缓存的对象列表 (对象数: {len(self._cached_all_objects)})")
+
+        return self._cached_all_objects
+
     def _group_similar_objects(self):
         """将相似的对象分组"""
         if self.debug:
@@ -370,11 +394,12 @@ class ARCRelationshipLibraries:
             grouped_by_color_shape = defaultdict(list)
 
             # 安全地构建所有对象的列表
-            all_objects = []
-            for pair_id, pair_data in self.objects_by_pair.items():
-                for io_type, obj_ids in pair_data.items():
-                    for obj_id in obj_ids:
-                        all_objects.append((pair_id, io_type, obj_id))
+            all_objects = self._get_all_objects()
+            # all_objects = []
+            # for pair_id, pair_data in self.objects_by_pair.items():
+            #     for io_type, obj_ids in pair_data.items():
+            #         for obj_id in obj_ids:
+            #             all_objects.append((pair_id, io_type, obj_id))
 
             if self.debug:
                 self.debug_print(f"处理 {len(all_objects)} 个对象的颜色和形状分组")
@@ -434,11 +459,12 @@ class ARCRelationshipLibraries:
 
         try:
             # 收集所有对象
-            all_objects = []
-            for pair_id, pair_data in self.objects_by_pair.items():
-                for io_type, obj_ids in pair_data.items():
-                    for obj_id in obj_ids:
-                        all_objects.append((pair_id, io_type, obj_id))
+            all_objects = self._get_all_objects()
+            # all_objects = []
+            # for pair_id, pair_data in self.objects_by_pair.items():
+            #     for io_type, obj_ids in pair_data.items():
+            #         for obj_id in obj_ids:
+            #             all_objects.append((pair_id, io_type, obj_id))
 
             total_objects = len(all_objects)
             if self.debug:
@@ -696,8 +722,8 @@ class ARCRelationshipLibraries:
 
         # 分析每种形状最常见的操作
         for shape_hash, operations in self.shape_to_operation_map.items():
-            if len(operations) < 2:
-                continue
+            # if len(operations) < 2:
+            #     continue
 
             # 按操作类型分组
             op_types = {}
@@ -712,7 +738,7 @@ class ARCRelationshipLibraries:
 
                 # 如果这种操作占比较高，添加为模式
                 consistency = len(occurrences) / len(operations)
-                if consistency >= 0.6 and len(occurrences) >= 2:
+                if consistency >= 0.6 and len(occurrences) >= 1:
                     pattern = {
                         "type": "shape_operation_pattern",
                         "shape_hash": shape_hash,
@@ -733,8 +759,8 @@ class ARCRelationshipLibraries:
 
         # 分析每种颜色最常见的操作
         for color, operations in self.color_to_operation_map.items():
-            if len(operations) < 2:
-                continue
+            # if len(operations) < 2:
+            #     continue
 
             # 按操作类型分组
             op_types = {}
@@ -749,7 +775,7 @@ class ARCRelationshipLibraries:
 
                 # 如果这种操作占比较高，添加为模式
                 consistency = len(occurrences) / len(operations)
-                if consistency >= 0.6 and len(occurrences) >= 2:
+                if consistency >= 0.6 and len(occurrences) >= 1:
                     pattern = {
                         "type": "color_operation_pattern",
                         "color": color,
@@ -866,6 +892,7 @@ class ARCRelationshipLibraries:
                         },
                         "effect": {
                             "color_change": {
+                                #! what id
                                 "from_color": from_color,
                                 "to_color": to_color
                             }
@@ -1136,6 +1163,14 @@ class ARCRelationshipLibraries:
     def _get_shape_hash(self, obj_info):
         """从对象信息中获取形状哈希值"""
         try:
+            # 首先尝试从ID中提取哈希值
+            if hasattr(obj_info, 'obj_id'):
+                # 提取ID中的哈希部分
+                id_parts = obj_info.obj_id.split('_')
+                if len(id_parts) >= 3:
+                    return id_parts[2]  # 返回哈希部分
+
+            # 如果从ID中获取失败，尝试传统方法
             if hasattr(obj_info, 'obj_000'):
                 return hash(tuple(map(tuple, obj_info.obj_000)))
             return None
@@ -1145,6 +1180,14 @@ class ARCRelationshipLibraries:
     def _get_shape_hash_from_dict(self, obj_info_dict):
         """从对象信息字典中获取形状哈希值"""
         try:
+            # 首先尝试从ID中提取哈希值
+            if 'id' in obj_info_dict:
+                # 提取ID中的哈希部分
+                id_parts = obj_info_dict['id'].split('_')
+                if len(id_parts) >= 3:
+                    return id_parts[2]  # 返回哈希部分
+
+            # 如果从ID中获取失败，尝试传统方法
             if 'obj_000' in obj_info_dict:
                 shape_data = obj_info_dict['obj_000']
                 return hash(tuple(map(tuple, shape_data)))

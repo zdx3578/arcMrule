@@ -10,29 +10,29 @@ from typing import List, Dict, Any, Callable, Optional
 
 class PatternAnalyzer:
     """处理共有模式分析的类"""
-    
+
     def __init__(self, debug_print=None):
         """
         初始化模式分析器
-        
+
         Args:
             debug_print: 调试打印函数（可选）
         """
         self.debug_print = debug_print
-        
+
     def analyze_common_patterns(self, mapping_rules):
         """
         分析多对训练数据的共有模式，考虑权重因素
-        
+
         Args:
             mapping_rules: 映射规则列表
-            
+
         Returns:
             共有模式字典
         """
         if not mapping_rules:
             return {}
-            
+
         # 分析共有的形状变换模式
         common_shape_transformations = self._find_common_shape_transformations(mapping_rules)
 
@@ -41,22 +41,22 @@ class PatternAnalyzer:
 
         # 分析共有的位置变化模式
         common_position_changes = self._find_common_position_changes(mapping_rules)
-        
+
         common_patterns = {
             "shape_transformations": common_shape_transformations,
             "color_mappings": common_color_mappings,
             "position_changes": common_position_changes
         }
-        
+        print("共有模式分析结果：", common_patterns)
         return common_patterns
-        
+
     def _find_common_shape_transformations(self, mapping_rules):
         """
         寻找共有的形状变换模式，考虑权重
-        
+
         Args:
             mapping_rules: 映射规则列表
-            
+
         Returns:
             共有形状变换模式列表
         """
@@ -101,14 +101,14 @@ class PatternAnalyzer:
 
         # 按加权得分和出现次数排序
         return sorted(common_transforms, key=lambda x: (x["weight_score"], x["count"]), reverse=True)
-        
+
     def _find_common_color_mappings(self, mapping_rules):
         """
         寻找共有的颜色映射模式，考虑权重
-        
+
         Args:
             mapping_rules: 映射规则列表
-            
+
         Returns:
             共有颜色映射模式字典
         """
@@ -179,14 +179,14 @@ class PatternAnalyzer:
             "mappings": common_mappings,
             "patterns": color_patterns
         }
-        
+
     def _find_common_position_changes(self, mapping_rules):
         """
         寻找共有的位置变化模式，考虑权重
-        
+
         Args:
             mapping_rules: 映射规则列表
-            
+
         Returns:
             共有位置变化模式列表
         """
