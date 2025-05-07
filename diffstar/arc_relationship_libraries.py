@@ -831,7 +831,218 @@ class ARCRelationshipLibraries:
 
         return patterns
 
+
     def _find_conditional_patterns(self):
+        """寻找条件性模式，例如：如果移除了形状X，那么形状Y会变色"""
+        patterns = []
+        enhanced_data = {}  # 存储增强的信息，但不影响原有流程
+
+        if self.debug:
+            self.debug_print("开始寻找条件性模式 (兼容模式)...")
+
+        try:
+            # 收集每个数据对中被移除的形状 - 保持原始结构，但保存增强信息
+            removals_by_pair = defaultdict(list)
+            removals_enhanced = defaultdict(list)  # 增强版本
+            for pair_id, obj_id, obj_info in self.removed_objects:
+                shape_hash = self._get_shape_hash_from_dict(obj_info)
+                if shape_hash:
+                    # 原始结构保持不变
+                    removals_by_pair[pair_id].append((shape_hash, obj_id))
+                    # 增强信息单独存储
+                    removals_enhanced[pair_id].append((shape_hash, obj_id, obj_info))
+
+            if self.debug:
+                self.debug_print(f"收集了 {len(removals_by_pair)} 个数据对的移除对象信息")
+
+            # 收集每个数据对中的颜色变化 - 保持原始结构，但保存增强信息
+            color_changes_by_pair = defaultdict(list)
+            color_changes_enhanced = defaultdict(list)  # 增强版本
+            for rule in self.color_transformation_rules:
+                try:
+                    pair_id = rule.get("pair_id")
+                    from_color = rule.get("from_color")
+                    to_color = rule.get("to_color")
+
+                    if pair_id and from_color is not None and to_color is not None:
+                        # 原始结构保持不变
+                        color_changes_by_pair[pair_id].append((from_color, to_color, rule))
+
+                        # 尝试获取增强信息
+                        input_obj_id = rule.get("input_obj_id", "unknown")
+                        output_obj_id = rule.get("output_obj_id", "unknown")
+                        shape_hash = rule.get("shape_hash")
+                        if shape_hash is None:
+                            # 尝试从规则中推断形状
+                            if self.debug:
+                                self.debug_print(f"规则中缺少shape_hash，尝试推断... rule_id: {pair_id}")
+
+                        # 存储增强信息
+                        enhanced_info = {
+                            "from_color": from_color,
+                            "to_color": to_color,
+                            "input_obj_id": input_obj_id,
+                            "output_obj_id": output_obj_id,
+                            "shape_hash": shape_hash,
+                            "rule": rule
+                        }
+                        color_changes_enhanced[pair_id].append(enhanced_info)
+                except Exception as e:
+                    if self.debug:
+                        self.debug_print(f"处理颜色变化规则时出错: {e}, rule: {rule}")
+
+            if self.debug:
+                self.debug_print(f"收集了 {len(color_changes_by_pair)} 个数据对的颜色变化信息")
+
+            # 寻找移除形状与颜色变化之间的关联 - 保持原始流程
+            removal_color_associations = defaultdict(lambda: defaultdict(list))
+
+            for pair_id, removals in removals_by_pair.items():
+                if pair_id in color_changes_by_pair:
+                    for shape_hash, obj_id in removals:
+                        for from_color, to_color, rule in color_changes_by_pair[pair_id]:
+                            key = (shape_hash, from_color, to_color)
+                            removal_color_associations[key][pair_id].append(rule)
+
+            # 尝试构建增强版关联，但不影响原流程
+            enhanced_associations = {}
+            try:
+                if self.debug:
+                    self.debug_print("尝试构建增强版关联数据...")
+
+                enhanced_associations = defaultdict(lambda: defaultdict(list))
+                for pair_id, removals in removals_enhanced.items():
+                    if pair_id in color_changes_enhanced:
+                        for removed_shape_hash, removed_obj_id, removed_obj_info in removals:
+                            for change_info in color_changes_enhanced[pair_id]:
+                                from_color = change_info["from_color"]
+                                to_color = change_info["to_color"]
+                                affected_shape_hash = change_info.get("shape_hash", "UNKNOWN")
+
+                                # 记录增强信息但不用于主要流程
+                                key = (removed_shape_hash, from_color, to_color, affected_shape_hash)
+                                enhanced_associations[key][pair_id].append({
+                                    "change_info": change_info,
+                                    "removal_info": {
+                                        "obj_id": removed_obj_id,
+                                        "shape_hash": removed_shape_hash,
+                                        "obj_info": removed_obj_info
+                                    }
+                                })
+            except Exception as e:
+                if self.debug:
+                    self.debug_print(f"构建增强版关联时出错 (不影响主流程): {e}")
+
+            # 过滤和转换为模式 - 保持原始流程
+            for (shape_hash, from_color, to_color), pair_data in removal_color_associations.items():
+                if len(pair_data) >= 2:  # 至少在两个数据对中出现
+                    # 收集所有支持的数据对和规则
+                    supporting_pairs = []
+                    supporting_rules = []
+
+                    for pair_id, rules in pair_data.items():
+                        supporting_pairs.append(pair_id)
+                        supporting_rules.extend(rules)
+
+                    # 估算置信度
+                    # 计算同时有该形状移除和该颜色变化的比例
+                    pairs_with_shape_removal = set(pair_id for pair_id, removals in removals_by_pair.items()
+                                            if any(sh == shape_hash for sh, _ in removals))
+                    pairs_with_color_change = set(pair_id for pair_id, changes in color_changes_by_pair.items()
+                                            if any(fc == from_color and tc == to_color for fc, tc, _ in changes))
+
+                    if pairs_with_shape_removal and pairs_with_color_change:
+                        total_relevant_pairs = len(pairs_with_shape_removal.union(pairs_with_color_change))
+                        confidence = len(supporting_pairs) / total_relevant_pairs
+
+                        # 尝试从增强数据中提取更多信息
+                        output_objects = []
+                        try:
+                            for pair_id in supporting_pairs:
+                                # 查找对应的增强信息
+                                for key, pair_dict in enhanced_associations.items():
+                                    if key[0] == shape_hash and key[1] == from_color and key[2] == to_color and pair_id in pair_dict:
+                                        for assoc in pair_dict[pair_id]:
+                                            change = assoc.get("change_info", {})
+                                            output_obj_id = change.get("output_obj_id")
+                                            if output_obj_id and output_obj_id != "unknown":
+                                                output_objects.append(output_obj_id)
+                        except Exception as e:
+                            if self.debug:
+                                self.debug_print(f"提取输出对象时出错 (不影响模式生成): {e}")
+
+                        # 创建模式 - 基本结构保持不变
+                        pattern = {
+                            "type": "conditional_pattern",
+                            "subtype": "removal_color_change",
+                            "condition": {
+                                "operation": "remove",
+                                "shape_hash": shape_hash
+                            },
+                            "effect": {
+                                "color_change": {
+                                    "from_color": from_color,
+                                    "to_color": to_color
+                                }
+                            },
+                            "supporting_pairs": supporting_pairs,
+                            "confidence": confidence,
+                            "description": f"当形状{shape_hash}被移除时，颜色从{from_color}变为{to_color}"
+                        }
+
+                        # 尝试添加增强信息，但不影响原有结构
+                        if output_objects:
+                            pattern["output_objects"] = output_objects
+
+                        patterns.append(pattern)
+
+            if self.debug:
+                self.debug_print(f"找到 {len(patterns)} 个条件模式")
+
+                # 记录详细的增强数据统计
+                enhanced_patterns_count = 0
+                for key, pair_dict in enhanced_associations.items():
+                    if len(pair_dict) >= 2:
+                        enhanced_patterns_count += 1
+
+                self.debug_print(f"增强版关联数据中有 {enhanced_patterns_count} 个可能的模式")
+                if len(patterns) == 0 and enhanced_patterns_count > 0:
+                    self.debug_print("警告: 原始模式为0但增强版有模式，可能存在兼容性问题")
+                    # 记录几个样本增强模式以供调试
+                    sample_count = 0
+                    for key, pair_dict in enhanced_associations.items():
+                        if len(pair_dict) >= 2 and sample_count < 2:
+                            removed_shape, from_col, to_col, affected_shape = key
+                            self.debug_print(f"样本增强模式: 当形状{removed_shape}被移除时，形状{affected_shape}的颜色从{from_col}变为{to_col}")
+                            sample_count += 1
+
+        except Exception as e:
+            if self.debug:
+                self.debug_print(f"寻找条件模式时发生异常 (回退到基本模式): {e}")
+                import traceback
+                self.debug_print(traceback.format_exc())
+
+        if len(patterns) == 0 and self.debug:
+            self.debug_print("未找到条件模式，检查可能的问题...")
+
+            # 提供额外的诊断信息
+            if not self.color_transformation_rules:
+                self.debug_print("- 未发现颜色转换规则")
+            else:
+                self.debug_print(f"- 有 {len(self.color_transformation_rules)} 条颜色转换规则")
+
+            if not self.removed_objects:
+                self.debug_print("- 未发现被移除的对象")
+            else:
+                self.debug_print(f"- 有 {len(self.removed_objects)} 个被移除的对象")
+
+        # 存储增强数据以供将来使用
+        enhanced_data["removal_color_enhanced"] = enhanced_associations
+
+        return patterns
+
+
+    def _find_conditional_patterns0(self):
         """寻找条件性模式，例如：如果移除了形状X，那么形状Y会变色"""
         patterns = []
 
