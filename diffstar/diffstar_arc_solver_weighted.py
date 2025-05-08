@@ -321,6 +321,7 @@ class WeightedARCSolver:
             print(f"任务 {task_id} 的全局背景色: {background_color}")
 
         for param in param_combinations:
+            print(f"\n\n\n\n\n\n处理任务 {task_id} 的参数组合: {param}")
             for i, example in enumerate(task['train']):
                 print(f"\n\n\n\n处理 task pair 数据对 {i} \n\n")
                 input_grid = example['input']
@@ -328,6 +329,17 @@ class WeightedARCSolver:
 
                 # 添加到差异分析器
                 self.diff_analyzer.add_train_pair(i, input_grid, output_grid, param, background_color)
+            for i, example in enumerate(task['test']):
+                print(f"\n\n\n\n处理 task pair 数据对 {i} \n\n")
+                input_grid = example['input']
+                if 'output' not in example or example['output'] is None:
+                    output_grid = None
+                else:
+                    output_grid = example['output']
+
+                # 添加到差异分析器
+                self.diff_analyzer.add_test_pair(i, input_grid, output_grid, param, background_color,test=True)
+
 
             # 分析共有模式（使用带权重的版本）
             # common_patterns = self.diff_analyzer.analyze_common_patterns_with_weights()

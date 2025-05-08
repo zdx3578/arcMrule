@@ -157,7 +157,7 @@ class ObjectMatcher:
         #     }
 
         #     mapping_rule["combined_transformations"].append(combined_transform)
-
+        #!
 
         transformation_rule = self._analyze_input_to_output_transformation(
             pair_id, input_grid, output_grid,

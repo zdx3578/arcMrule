@@ -454,6 +454,8 @@ class ARCDiffAnalyzer:
         self.mapping_rules = []  # 每对数据的映射规则
         self.common_patterns = {}  # 共有模式
 
+        self.test_pairs = []
+
         # 调试相关
         self.debug = debug
         self.debug_dir = debug_dir

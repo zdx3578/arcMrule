@@ -17,7 +17,7 @@ from .weight_calculator import WeightCalculator
 from .object_matching import ObjectMatcher
 from .pattern_analyzer import PatternAnalyzer
 from .rule_applier import RuleApplier
-from .utils import get_hashable_representation
+from .utils import get_hashable_representation,get_obj_shape_hash
 
 
 class WeightedARCDiffAnalyzer(ARCDiffAnalyzer):
@@ -67,7 +67,8 @@ class WeightedARCDiffAnalyzer(ARCDiffAnalyzer):
             'input': [],  # [(pair_id, [WeightedObjInfo]), ...]
             'output': [], # [(pair_id, [WeightedObjInfo]), ...]
             'diff_in': [], # [(pair_id, [WeightedObjInfo]), ...]
-            'diff_out': []  # [(pair_id, [WeightedObjInfo]), ...]
+            'diff_out': [],  # [(pair_id, [WeightedObjInfo]), ...]
+            'test_input': [],  # [(pair_id, [WeightedObjInfo]), ...]
         }
 
         # 初始化辅助组件
@@ -94,7 +95,7 @@ class WeightedARCDiffAnalyzer(ARCDiffAnalyzer):
         if hasattr(self, 'weight_calculator'):
             self.weight_calculator.set_background_colors(background_colors)
 
-    def add_train_pair(self, pair_id, input_grid, output_grid, param, background_color):
+    def add_train_pair(self, pair_id, input_grid, output_grid, param, background_color,test = False):
         """
         添加一对训练数据，提取对象并计算权重
 
@@ -189,6 +190,8 @@ class WeightedARCDiffAnalyzer(ARCDiffAnalyzer):
         self.all_objects['diff_in'].append((pair_id, diff_in_obj_infos))
         self.all_objects['diff_out'].append((pair_id, diff_out_obj_infos))
 
+        # self.all_objects['test_input'].append((pair_id, input_obj_infos))
+
         # 更新形状库
         self._update_shape_library(input_obj_infos + output_obj_infos)
 
@@ -244,6 +247,64 @@ class WeightedARCDiffAnalyzer(ARCDiffAnalyzer):
             # if attr_rules:
             #     self._debug_save_json(attr_rules, f"attr_dependency_rules_{pair_id}")
             #     self._debug_print(f"提取了 {len(attr_rules)} 个属性依赖规则")
+
+
+
+    def add_test_pair(self, pair_id, input_grid, output_grid , param, background_color,test = True):
+
+        if self.debug:
+            self._debug_print(f"处理训练对test  {pair_id}")
+            self._debug_save_grid(input_grid, f"test_input_{pair_id}")
+
+
+        # 确保网格是元组的元组格式
+        if isinstance(input_grid, list):
+            input_grid = tuple(tuple(row) for row in input_grid)
+
+        # 保存原始网格对
+        self.test_pairs.append((input_grid, output_grid))
+
+        # 获取网格尺寸
+        height_in, width_in = len(input_grid), len(input_grid[0])
+
+        # 提取对象
+        test_input_objects = pureobjects_from_grid(
+            param, pair_id, 'in', input_grid, [height_in, width_in], background_color=background_color
+        )
+
+        # 转换为加权对象信息
+        test_input_obj_infos = [
+            WeightedObjInfo(pair_id, 'in', obj, obj_params=None, grid_hw=[height_in, width_in])
+            for obj in test_input_objects
+        ]
+
+        if self.debug:
+            self._debug_print(f"从输入网格提取了 {len(test_input_obj_infos)} 个对象")
+
+        # 存储提取的对象
+        self.all_objects['test_input'].append((pair_id, test_input_obj_infos))
+
+
+        # 更新形状库
+        self._update_shape_library(test_input_obj_infos )
+
+        # 分析对象间的部分-整体关系
+        self._analyze_part_whole_relationships(test_input_obj_infos)
+
+
+        # # 应用权重计算 - 为每个对象设置权重
+        # self.weight_calculator.calculate_object_weights(
+        #     pair_id, input_grid,             test_input_obj_infos        )
+
+
+        # if self.debug:
+        #     # self._debug_save_json(mapping_rule, f"mapping_rule_{pair_id}")
+        #     self._debug_print(f"\n\nadd_test_pair:完成训练对 {pair_id} 的分析和权重计算")
+        #     self._debug_print_object_weights(test_input_obj_infos, f"test_input_obj_weights_{pair_id}")
+
+
+
+
 
     def _extract_shape_color_rules(self, pair_id, input_obj_infos, output_obj_infos,
                                 diff_in_obj_infos, diff_out_obj_infos):
@@ -631,7 +692,8 @@ class WeightedARCDiffAnalyzer(ARCDiffAnalyzer):
 
             # 7. 生成针对测试数据的优化应用计划
             optimized_plan = self._generate_optimized_plan(
-                basic_patterns, cross_pair_patterns, advanced_rules, test_features)
+                basic_patterns,
+                cross_pair_patterns, advanced_rules, test_features)
 
             combined_results["optimized_plan"] = optimized_plan
 
@@ -671,16 +733,17 @@ class WeightedARCDiffAnalyzer(ARCDiffAnalyzer):
                         features['colors'].add(cell)
 
         # 2. 提取对象，这需要使用现有的对象提取函数
-        objects = self._extract_objects_from_grid(test_input)
+        # objects = self._extract_objects_from_grid(test_input)
+        objects = self.all_objects['test_input'][-1][1] if self.all_objects['test_input'] else []
         features['objects'] = objects
 
         # 3. 从对象计算形状哈希
         for obj in objects:
-            shape_hash = self._calculate_shape_hash(obj)
+            shape_hash = get_obj_shape_hash(obj)
             if shape_hash:
                 features['shapes'].append(shape_hash)
 
-        # 确保颜色是列表而非集合，以便序列化
+        # # 确保颜色是列表而非集合，以便序列化
         features['colors'] = list(features['colors'])
 
         return features
