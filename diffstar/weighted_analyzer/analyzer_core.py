@@ -644,6 +644,7 @@ class WeightedARCDiffAnalyzer(ARCDiffAnalyzer):
         Returns:
             带权重的通用模式和针对测试数据的优化规则
         """
+        print("\n\n\n\n\n\nCOMMON ommon_patterns_with_weights开始分析共同模式\n\n")
         if not self.mapping_rules:
             return {}
 

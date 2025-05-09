@@ -12,7 +12,7 @@ import json
 class ARCRelationshipLibraries:
     """多维度ARC关系库管理系统"""
 
-    def __init__(self, debug=False, debug_print=None):
+    def __init__(self, debug=True, debug_print=None):
         """
         初始化关系库系统
 
@@ -20,7 +20,7 @@ class ARCRelationshipLibraries:
             debug: 是否启用调试模式
             debug_print: 调试打印函数
         """
-        self.debug = debug
+        self.debug = True # debug
         self.debug_print = debug_print
         self._cached_all_objects = None  # 添加缓存属性
 
@@ -87,7 +87,7 @@ class ARCRelationshipLibraries:
             all_objects: 所有对象信息
         """
         if self.debug:
-            self.debug_print("开始构建多维度关系库...")
+            self.debug_print("\n\n\n\n开始构建多维度关系库...")
 
         self.total_pairs = len(mapping_rules)
 
@@ -838,7 +838,7 @@ class ARCRelationshipLibraries:
         enhanced_data = {}  # 存储增强的信息，但不影响原有流程
 
         if self.debug:
-            self.debug_print("开始寻找条件性模式 (兼容模式)...")
+            self.debug_print("\n\n开始寻找条件性模式 (兼容模式)...")
 
         try:
             # 收集每个数据对中被移除的形状 - 保持原始结构，但保存增强信息
@@ -864,7 +864,7 @@ class ARCRelationshipLibraries:
                     from_color = rule.get("from_color")
                     to_color = rule.get("to_color")
 
-                    if pair_id and from_color is not None and to_color is not None:
+                    if isinstance(pair_id, (int, str)) and from_color is not None and to_color is not None:
                         # 原始结构保持不变
                         color_changes_by_pair[pair_id].append((from_color, to_color, rule))
 
@@ -935,7 +935,7 @@ class ARCRelationshipLibraries:
 
             # 过滤和转换为模式 - 保持原始流程
             for (shape_hash, from_color, to_color), pair_data in removal_color_associations.items():
-                if len(pair_data) >= 2:  # 至少在两个数据对中出现
+                if len(pair_data) >= 1:  # 至少在1个数据对中出现
                     # 收集所有支持的数据对和规则
                     supporting_pairs = []
                     supporting_rules = []
@@ -1059,7 +1059,7 @@ class ARCRelationshipLibraries:
             pair_id = rule.get("pair_id")
             from_color = rule.get("from_color")
             to_color = rule.get("to_color")
-            if pair_id and from_color is not None and to_color is not None:
+            if isinstance(pair_id, (int, str)) and from_color is not None and to_color is not None:
                 color_changes_by_pair[pair_id].append((from_color, to_color, rule))
 
         # 寻找移除形状与颜色变化之间的关联
@@ -1074,7 +1074,7 @@ class ARCRelationshipLibraries:
 
         # 过滤和转换为模式
         for (shape_hash, from_color, to_color), pair_data in removal_color_associations.items():
-            if len(pair_data) >= 2:  # 至少在两个数据对中出现
+            if len(pair_data) >= 1:  # 至少在两个数据对中出现
                 # 收集所有支持的数据对和规则
                 supporting_pairs = []
                 supporting_rules = []

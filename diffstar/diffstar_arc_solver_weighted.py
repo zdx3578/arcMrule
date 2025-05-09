@@ -323,14 +323,14 @@ class WeightedARCSolver:
         for param in param_combinations:
             print(f"\n\n\n\n\n\n处理任务 {task_id} 的参数组合: {param}")
             for i, example in enumerate(task['train']):
-                print(f"\n\n\n\n处理 task pair 数据对 {i} \n\n")
+                print(f"\n\n\n\n处理 task TRAIN pair 数据对 {i} \n\n")
                 input_grid = example['input']
                 output_grid = example['output']
 
                 # 添加到差异分析器
                 self.diff_analyzer.add_train_pair(i, input_grid, output_grid, param, background_color)
             for i, example in enumerate(task['test']):
-                print(f"\n\n\n\n处理 task pair 数据对 {i} \n\n")
+                print(f"\n\n\n\n处理 task TEST pair 数据对 {i} \n\n")
                 input_grid = example['input']
                 if 'output' not in example or example['output'] is None:
                     output_grid = None
