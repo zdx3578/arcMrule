@@ -13,7 +13,7 @@ from .utils import get_hashable_representation
 class ObjectMatcher:
     """处理对象匹配和映射的类"""
 
-    def __init__(self, debug_print=None):
+    def __init__(self, debug_print=False):
         """
         初始化对象匹配器
 
@@ -21,9 +21,10 @@ class ObjectMatcher:
             debug_print: 调试打印函数（可选）
         """
         self.debug_print = debug_print
+        self.debug = debug_print
 
     def analyze_diff_mapping_with_weights(self, pair_id, input_grid, output_grid, diff_in, diff_out,
-                                        input_obj_infos, output_obj_infos, diff_in_obj_infos, diff_out_obj_infos):
+                                        input_obj_infos, output_obj_infos, diff_in_obj_infos, diff_out_obj_infos,debug):
         """
         基于对象权重分析差异网格映射关系
 
@@ -41,6 +42,9 @@ class ObjectMatcher:
         #! !
         diff_in_obj_infos = input_obj_infos
         diff_out_obj_infos = output_obj_infos
+
+        self.debug_print = debug
+        self.debug = debug
 
         if self.debug_print:
             self.debug_print(f"基于权重分析差异映射关系，pair_id={pair_id}")
@@ -168,7 +172,9 @@ class ObjectMatcher:
 
         # 将转换规则合并到映射规则中
         mapping_rule["input_to_output_transformation"] = transformation_rule
-        print('\n\n\n one pair in out mapping_rule:\n\n', mapping_rule)
+        # if self.debug:
+        if self.debug:
+            print('\n\n\n one pair in out mapping_rule:\n\n', mapping_rule)
 
         return mapping_rule
 

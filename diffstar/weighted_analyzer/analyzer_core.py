@@ -217,7 +217,7 @@ class WeightedARCDiffAnalyzer(ARCDiffAnalyzer):
         # 分析diff映射关系
         mapping_rule = self.object_matcher.analyze_diff_mapping_with_weights(
             pair_id, input_grid, output_grid, diff_in, diff_out,
-            input_obj_infos, output_obj_infos, diff_in_obj_infos, diff_out_obj_infos
+            input_obj_infos, output_obj_infos, diff_in_obj_infos, diff_out_obj_infos,self.debug
         )
 
         self.mapping_rules.append(mapping_rule)
@@ -661,7 +661,9 @@ class WeightedARCDiffAnalyzer(ARCDiffAnalyzer):
 
         # 2. 查找跨数据对模式
         cross_pair_patterns = relationship_libs.find_patterns_across_pairs()
-        print(f"\n\n\n\n\n ! ! pairs : 找到  cross_pair_patterns  {len(cross_pair_patterns)} 个跨数据对模式:\n\n\n\n",cross_pair_patterns)
+
+        if self.debug:
+            print(f"\n\n\n\n\n ! ! pairs : 找到  cross_pair_patterns  {len(cross_pair_patterns)} 个跨数据对模式:\n\n\n\n",cross_pair_patterns)
 
         # test_input = task
         for i, example in enumerate(task['test']):
@@ -684,7 +686,9 @@ class WeightedARCDiffAnalyzer(ARCDiffAnalyzer):
         from enhanced_pattern_meta_analyzer import EnhancedPatternMetaAnalyzer
         meta_analyzer = EnhancedPatternMetaAnalyzer(debug=self.debug, debug_print=self._debug_print)
         advanced_rules = meta_analyzer.process_patterns(cross_pair_patterns, test_features)
-        print(f"\n\n\n\n\n ! ! pairs : enhanced_pattern_meta_analyzer : advanced_rules : 找到 {len(advanced_rules)} 个增强规则:\n\n\n", advanced_rules)
+
+        if self.debug:
+            print(f"\n\n\n\n\n ! ! pairs : enhanced_pattern_meta_analyzer : advanced_rules : 找到 {len(advanced_rules)} 个增强规则:\n\n\n", advanced_rules)
 
         # 5. 调用原始模式分析器获取基本模式
         basic_patterns = self.pattern_analyzer.analyze_common_patterns(self.mapping_rules)
@@ -695,7 +699,7 @@ class WeightedARCDiffAnalyzer(ARCDiffAnalyzer):
             "cross_pair_patterns": cross_pair_patterns,
             "advanced_rules": advanced_rules
         }
-        #! plan for test 
+        #! plan for test
         if test_features:
             combined_results["test_features"] = test_features
 

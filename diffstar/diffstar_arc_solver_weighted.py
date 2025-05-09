@@ -448,7 +448,8 @@ class WeightedARCSolver:
                     # print(f"预测置信度: {prediction_confidence:.4f}")
 
                 # 如果有解决方案，检查预测是否正确
-                if self.debug:
+                # if self.debug:
+                if True:
                     # print(f"\n\n\n\n\n\n处理 task 任务 {task_id}")
                     print(f"\n\n\n\n\n\n处理任务 {task_id} 的参数组合: {param}")
 
@@ -595,10 +596,10 @@ class WeightedARCSolver:
                 # 检查任务是否成功解决
                 if result and result.get('test_success', False):
                     success_count += 1
-                    if self.debug:
+                    if True: #self.debug:
                         print(f"任务 {task_id} 完全成功解决! ({success_count}/{count})")
 
-                if self.debug:
+                if True: #self.debug:
                     print(f"完成处理任务 {task_id} ({count}/{len(task_dict) if limit is None else min(limit, len(task_dict))})")
                     if success_count > 0:
                         print(f"当前成功率: {success_count/count:.2f} ({success_count}/{count})")
