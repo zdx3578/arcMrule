@@ -18,6 +18,8 @@ from .object_matching import ObjectMatcher
 from .pattern_analyzer import PatternAnalyzer
 from .rule_applier import RuleApplier
 from .utils import get_hashable_representation,get_obj_shape_hash
+from .optimized_rule_applier import OptimizedRuleApplier
+
 
 
 class WeightedARCDiffAnalyzer(ARCDiffAnalyzer):
@@ -82,6 +84,7 @@ class WeightedARCDiffAnalyzer(ARCDiffAnalyzer):
         self.object_matcher = ObjectMatcher(self._debug_print if debug else None)
         self.pattern_analyzer = PatternAnalyzer(self._debug_print if debug else None)
         self.rule_applier = RuleApplier(self._debug_print if debug else None)
+        self.optimized_rule_applier = OptimizedRuleApplier(debug=debug, debug_print=self._debug_print)
 
     def set_background_colors(self, background_colors):
         """
@@ -105,6 +108,8 @@ class WeightedARCDiffAnalyzer(ARCDiffAnalyzer):
             output_grid: 输出网格
             param: 对象提取参数
         """
+        self.background_color = background_color
+
         if self.debug:
             self._debug_print(f"处理训练对 {pair_id}")
             self._debug_save_grid(input_grid, f"input_{pair_id}")
@@ -632,6 +637,7 @@ class WeightedARCDiffAnalyzer(ARCDiffAnalyzer):
 
     """
     增强的ARC分析流程：集成测试形状匹配和组合规则提取
+    ##  analyze_with_test_data_matching
     """
 
     def enhanced_analyze_common_patterns_with_test_data_matching(self, task=None):
@@ -655,6 +661,7 @@ class WeightedARCDiffAnalyzer(ARCDiffAnalyzer):
 
         # 2. 查找跨数据对模式
         cross_pair_patterns = relationship_libs.find_patterns_across_pairs()
+        print(f"\n\n\n\n\n ! ! pairs : 找到  cross_pair_patterns  {len(cross_pair_patterns)} 个跨数据对模式:\n\n\n\n",cross_pair_patterns)
 
         # test_input = task
         for i, example in enumerate(task['test']):
@@ -677,6 +684,7 @@ class WeightedARCDiffAnalyzer(ARCDiffAnalyzer):
         from enhanced_pattern_meta_analyzer import EnhancedPatternMetaAnalyzer
         meta_analyzer = EnhancedPatternMetaAnalyzer(debug=self.debug, debug_print=self._debug_print)
         advanced_rules = meta_analyzer.process_patterns(cross_pair_patterns, test_features)
+        print(f"\n\n\n\n\n ! ! pairs : enhanced_pattern_meta_analyzer : advanced_rules : 找到 {len(advanced_rules)} 个增强规则:\n\n\n", advanced_rules)
 
         # 5. 调用原始模式分析器获取基本模式
         basic_patterns = self.pattern_analyzer.analyze_common_patterns(self.mapping_rules)
@@ -818,7 +826,7 @@ class WeightedARCDiffAnalyzer(ARCDiffAnalyzer):
                 # 添加条件变化
                 for cond in rule.get('conditional_rules', []):
                     step_info["action"]["conditional_changes"].append({
-                        "when_remove_shape": cond['condition'].get('shape_hash'),
+                        "when_removed_shape_change_color": cond['condition'].get('shape_hash'),
                         "color_change": {
                             "from": cond['effect']['from_color'],
                             "to": cond['effect']['to_color']
@@ -827,7 +835,7 @@ class WeightedARCDiffAnalyzer(ARCDiffAnalyzer):
 
             elif rule.get('rule_type') == 'conditional_color_change':
                 step_info["action"] = {
-                    "when_remove_shape": rule['condition'].get('shape_hash'),
+                    "when_removed_shape_change_color": rule['condition'].get('shape_hash'),
                     "color_change": {
                         "from": rule['effect']['from_color'],
                         "to": rule['effect']['to_color']
@@ -1320,7 +1328,64 @@ class WeightedARCDiffAnalyzer(ARCDiffAnalyzer):
 
         return output_grid
 
-    def apply_transformation_rules(self, input_grid, common_patterns=None, transformation_rules=None):
+    def apply_transformation_rules(self, trainortest, pair_id, input_grid, common_patterns=None, transformation_rules=None):
+        """
+        应用提取的转换规则，将输入网格转换为预测的输出网格
+
+        Args:
+            input_grid: 输入网格
+            common_patterns: 识别的共有模式，如果不提供则使用当前的共有模式
+            transformation_rules: 可选，特定的转换规则列表，如果不提供则使用当前累积的规则
+
+        Returns:
+            预测的输出网格
+        """
+        if self.debug:
+            self._debug_print("调用转换规则应用功能")
+
+        # 使用当前的共有模式（如果未提供）
+        if common_patterns is None:
+            if not self.common_patterns:
+                # 使用增强版分析，包含测试匹配
+                self.common_patterns = self.analyze_with_test_data_matching(input_grid)
+            common_patterns = self.common_patterns
+
+        # 使用当前的转换规则（如果未提供）
+        # if transformation_rules is None:
+        #     transformation_rules = self.transformation_rules
+
+        # 获取网格尺寸
+        if isinstance(input_grid, list):
+            input_grid = tuple(tuple(row) for row in input_grid)
+
+        height, width = len(input_grid), len(input_grid[0])
+
+        # 提取输入网格中的对象
+        input_objects = []
+        # for param in [(True, True, False), (True, False, False), (False, False, False), (False, True, False)]:
+        #     objects = pureobjects_from_grid(param, -1, 'test_in', input_grid, [height, width])
+        #     for obj in objects:
+        #         input_objects.append(WeightedObjInfo(-1, 'test_in', obj, obj_params=None, grid_hw=[height, width]))
+
+        # # 计算测试输入对象的权重
+        # self.weight_calculator.calculate_test_object_weights(input_grid, input_objects, self.shape_library)
+
+        if trainortest == 'train':
+            input_objects = self.all_objects['input'][pair_id][1]
+        else:
+            input_objects = self.all_objects['test_input'][pair_id][1]
+
+        # 委托给优化规则应用器
+        return self.optimized_rule_applier.apply_transformation_rules(
+            input_grid,
+            common_patterns,
+            input_objects,
+            # transformation_rules,
+            traditional_rule_applier=self.rule_applier,  # 传递传统规则应用器作为回退
+            background_color=self.background_color
+        )
+
+    def apply_transformation_rules00(self, input_grid, common_patterns=None, transformation_rules=None):
         """
         应用提取的转换规则，将输入网格转换为预测的输出网格（委托给 rule_applier）
 

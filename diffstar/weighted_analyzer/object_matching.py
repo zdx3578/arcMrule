@@ -168,6 +168,7 @@ class ObjectMatcher:
 
         # 将转换规则合并到映射规则中
         mapping_rule["input_to_output_transformation"] = transformation_rule
+        print('\n\n\n one pair in out mapping_rule:\n\n', mapping_rule)
 
         return mapping_rule
 

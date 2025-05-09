@@ -87,7 +87,7 @@ class ARCRelationshipLibraries:
             all_objects: 所有对象信息
         """
         if self.debug:
-            self.debug_print("\n\n\n\n开始构建多维度关系库...")
+            self.debug_print("\n\n\n\n开始构建多维度关系库...\n\n\n")
 
         self.total_pairs = len(mapping_rules)
 

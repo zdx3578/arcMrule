@@ -369,10 +369,10 @@ class WeightedARCSolver:
                 actual_output = example['output']
 
                 # 使用提取的转换规则生成预测输出
-                predicted_output = self.diff_analyzer.apply_transformation_rules(
+                predicted_output = self.diff_analyzer.apply_transformation_rules('train',i,
                     input_grid,
                     common_patterns,
-                    transformation_rules=self.diff_analyzer.transformation_rules
+                    # transformation_rules=self.diff_analyzer.transformation_rules
                 )
 
                 # 检查预测是否与实际输出匹配
@@ -411,7 +411,7 @@ class WeightedARCSolver:
                 transform_based_prediction = self.diff_analyzer.apply_transformation_rules(
                     input_grid,
                     common_patterns,
-                    transformation_rules=self.diff_analyzer.transformation_rules
+                    # transformation_rules=self.diff_analyzer.transformation_rules
                 )
 
                 if self.debug:
