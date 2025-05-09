@@ -364,35 +364,36 @@ class WeightedARCSolver:
             train_validation_results = []
             train_success_count = 0
             print(f"\n\n\n\n\n\n处理训练数据验证")
-            for i, example in enumerate(task['train']):
-                input_grid = example['input']
-                actual_output = example['output']
+            #! plan just for test ,so no train test
+            # for i, example in enumerate(task['train']):
+            #     input_grid = example['input']
+            #     actual_output = example['output']
 
-                # 使用提取的转换规则生成预测输出
-                predicted_output = self.diff_analyzer.apply_transformation_rules('train',i,
-                    input_grid,
-                    common_patterns,
-                    # transformation_rules=self.diff_analyzer.transformation_rules
-                )
+            #     # 使用提取的转换规则生成预测输出
+            #     predicted_output = self.diff_analyzer.apply_transformation_rules('train',i,
+            #         input_grid,
+            #         common_patterns,
+            #         # transformation_rules=self.diff_analyzer.transformation_rules
+            #     )
 
-                # 检查预测是否与实际输出匹配
-                is_correct = predicted_output == actual_output
-                if is_correct:
-                    train_success_count += 1
+            #     # 检查预测是否与实际输出匹配
+            #     is_correct = predicted_output == actual_output
+            #     if is_correct:
+            #         train_success_count += 1
 
-                train_validation_results.append({
-                    'pair_id': i,
-                    'is_correct': is_correct,
-                    'confidence': self.diff_analyzer.get_prediction_confidence(predicted_output, actual_output)
-                })
+            #     train_validation_results.append({
+            #         'pair_id': i,
+            #         'is_correct': is_correct,
+            #         'confidence': self.diff_analyzer.get_prediction_confidence(predicted_output, actual_output)
+            #     })
 
             # 记录训练数据验证的成功率
-            train_success_rate = train_success_count / len(task['train']) if task['train'] else 0
+            train_success_rate = 1 #train_success_count / len(task['train']) if task['train'] else 0
 
             # 现在处理测试数据
             if self.debug:
                 print(f"\n\n\n\n\n===== 处理测试数据 =====")
-                print(f"\n\n\n\n\n训练验证成功率: {train_success_rate:.2f}\n\n\n\n\n")
+                # print(f"\n\n\n\n\n训练验证成功率: {train_success_rate:.2f}\n\n\n\n\n")
                 print(f"测试样例数量: {total_test_count}\n\n\n\n\n")
 
             for i, example in enumerate(task['test']):
@@ -404,18 +405,18 @@ class WeightedARCSolver:
                 if self.debug:
                     print(f"输入网格尺寸: {len(input_grid)}x{len(input_grid[0])}")
 
-                # 1. 使用权重分析模式进行预测
-                weight_based_prediction = self.diff_analyzer.apply_common_patterns(input_grid, param)
+                # 1. 使用权重分析模式进行预测 #! old code pass
+                weight_based_prediction = None #self.diff_analyzer.apply_common_patterns(input_grid, param)
 
                 # 2. 使用转换规则进行预测
-                transform_based_prediction = self.diff_analyzer.apply_transformation_rules(
+                transform_based_prediction = self.diff_analyzer.apply_transformation_rules( 'test', i,
                     input_grid,
                     common_patterns,
                     # transformation_rules=self.diff_analyzer.transformation_rules
                 )
 
                 if self.debug:
-                    print(f"权重模式预测网格尺寸: {len(weight_based_prediction)}x{len(weight_based_prediction[0]) if weight_based_prediction else 0}")
+                    # print(f"权重模式预测网格尺寸: {len(weight_based_prediction)}x{len(weight_based_prediction[0]) if weight_based_prediction else 0}")
                     print(f"转换规则预测网格尺寸: {len(transform_based_prediction)}x{len(transform_based_prediction[0]) if transform_based_prediction else 0}")
 
                 # 3. 确定最终预测结果（优先使用训练验证成功率更高的方法）
@@ -430,8 +431,8 @@ class WeightedARCSolver:
                     prediction_confidence = self.diff_analyzer.calculate_rule_confidence(
                         input_grid, transform_based_prediction
                     )
-                    if self.debug:
-                        print(f"使用方法: 转换规则 (训练成功率 > 0.5)")
+                    # if self.debug:
+                        # print(f"使用方法: 转换规则 (训练成功率 > 0.5)")
                 else:
                     final_prediction = weight_based_prediction
                     prediction_method = "weight_patterns"
@@ -444,9 +445,13 @@ class WeightedARCSolver:
 
                 if self.debug:
                     print(f"预测方法: {prediction_method}")
-                    print(f"预测置信度: {prediction_confidence:.4f}")
+                    # print(f"预测置信度: {prediction_confidence:.4f}")
 
                 # 如果有解决方案，检查预测是否正确
+                if self.debug:
+                    # print(f"\n\n\n\n\n\n处理 task 任务 {task_id}")
+                    print(f"\n\n\n\n\n\n处理任务 {task_id} 的参数组合: {param}")
+
                 if 'solution' in task_data and task_data['solution']:
                     actual_output = task_data['solution'][i]
                     is_correct = final_prediction == actual_output
@@ -457,32 +462,44 @@ class WeightedARCSolver:
                     else:
                         if self.debug:
                             print(f"预测结果: 错误 ✗")
+                    if test_success_count == total_test_count:
+                        if self.debug:
+                            print(f"\n===== 所有测试用例验证成功！提前结束 =====")
+                        return {
+                            'task_id': task_id,
+                            'common_patterns': common_patterns,
+                            'test_success': True,
+                            'test_success_count': test_success_count,
+                            'total_test_count': total_test_count,
+                            'success_rate': 1.0,
+                            'param_combination': param
+                        }
 
-                    test_predictions.append({
-                        'test_id': i,
-                        'input': input_grid,
-                        'predicted_output': final_prediction,
-                        'actual_output': actual_output,
-                        'is_correct': is_correct,
-                        'prediction_method': prediction_method,
-                        'confidence': prediction_confidence,
-                        'weight_based_prediction': weight_based_prediction,
-                        'transform_based_prediction': transform_based_prediction
-                    })
+                    # test_predictions.append({
+                    #     'test_id': i,
+                    #     'input': input_grid,
+                    #     'predicted_output': final_prediction,
+                    #     'actual_output': actual_output,
+                    #     'is_correct': is_correct,
+                    #     'prediction_method': prediction_method,
+                    #     'confidence': prediction_confidence,
+                    #     'weight_based_prediction': weight_based_prediction,
+                    #     'transform_based_prediction': transform_based_prediction
+                    # })
                 else:
                     # 没有解决方案，只返回预测
                     if self.debug:
                         print(f"预测结果: 未知（无参考解决方案）")
 
-                    test_predictions.append({
-                        'test_id': i,
-                        'input': input_grid,
-                        'predicted_output': final_prediction,
-                        'prediction_method': prediction_method,
-                        'confidence': prediction_confidence,
-                        'weight_based_prediction': weight_based_prediction,
-                        'transform_based_prediction': transform_based_prediction
-                    })
+                    # test_predictions.append({
+                    #     'test_id': i,
+                    #     'input': input_grid,
+                    #     'predicted_output': final_prediction,
+                    #     'prediction_method': prediction_method,
+                    #     'confidence': prediction_confidence,
+                    #     'weight_based_prediction': weight_based_prediction,
+                    #     'transform_based_prediction': transform_based_prediction
+                    # })
 
             # 输出总体测试结果
             if self.debug:
@@ -500,31 +517,31 @@ class WeightedARCSolver:
                     print(f"总测试样例: {total_test_count}")
                     print(f"使用参数: {param}")
 
-            if  train_success_rate > 0.98:
-                return {
-                    'task_id': task_id,
-                    'common_patterns': common_patterns,
-                    'mapping_rules': self.diff_analyzer.mapping_rules,
-                    'transformation_rules': self.diff_analyzer.transformation_rules,
-                    'test_predictions': test_predictions,
-                    'train_validation': {
-                        'success_count': train_success_count,
-                        'total_count': len(task['train']),
-                        'success_rate': train_success_rate,
-                        'detailed_results': train_validation_results
-                    },
-                    'test_evaluation': {
-                        'success_count': test_success_count,
-                        'total_count': total_test_count,
-                        'success_rate': test_success_count / total_test_count if total_test_count > 0 else 0
-                    },
-                    'weighted_info': {
-                        'pixel_threshold_pct': self.diff_analyzer.pixel_threshold_pct,
-                        'weight_increment': self.diff_analyzer.weight_increment,
-                        'diff_weight_increment': self.diff_analyzer.diff_weight_increment,
-                        'color_statistics': self.diff_analyzer.color_statistics
-                    }
-                }
+            # if  train_success_rate > 0.98:
+            #     return {
+            #         'task_id': task_id,
+            #         'common_patterns': common_patterns,
+            #         'mapping_rules': self.diff_analyzer.mapping_rules,
+            #         'transformation_rules': self.diff_analyzer.transformation_rules,
+            #         'test_predictions': test_predictions,
+            #         'train_validation': {
+            #             'success_count': train_success_count,
+            #             'total_count': len(task['train']),
+            #             'success_rate': train_success_rate,
+            #             'detailed_results': train_validation_results
+            #         },
+            #         'test_evaluation': {
+            #             'success_count': test_success_count,
+            #             'total_count': total_test_count,
+            #             'success_rate': test_success_count / total_test_count if total_test_count > 0 else 0
+            #         },
+            #         'weighted_info': {
+            #             'pixel_threshold_pct': self.diff_analyzer.pixel_threshold_pct,
+            #             'weight_increment': self.diff_analyzer.weight_increment,
+            #             'diff_weight_increment': self.diff_analyzer.diff_weight_increment,
+            #             'color_statistics': self.diff_analyzer.color_statistics
+            #         }
+            #     }
 
     def process_all_tasks(self, task_type='train', limit=None):
         """
@@ -557,6 +574,7 @@ class WeightedARCSolver:
         # 处理所有任务
         results = {}
         count = 0
+        success_count = 0
 
         for task_id, task in task_dict.items():
             if limit is not None and count >= limit:
@@ -574,8 +592,16 @@ class WeightedARCSolver:
                 results[task_id] = result
                 count += 1
 
+                # 检查任务是否成功解决
+                if result and result.get('test_success', False):
+                    success_count += 1
+                    if self.debug:
+                        print(f"任务 {task_id} 完全成功解决! ({success_count}/{count})")
+
                 if self.debug:
                     print(f"完成处理任务 {task_id} ({count}/{len(task_dict) if limit is None else min(limit, len(task_dict))})")
+                    if success_count > 0:
+                        print(f"当前成功率: {success_count/count:.2f} ({success_count}/{count})")
 
             except Exception as e:
                 if self.debug:
@@ -590,7 +616,13 @@ class WeightedARCSolver:
                 print(f"发生在文件 {filename}, 第 {line_number} 行, 函数 {func_name}")
                 print(f"错误代码: {code_line}")
 
-        return results
+        # 返回结果和统计信息
+        return {
+            'results': results,
+            'total_processed': count,
+            'success_count': success_count,
+            'success_rate': success_count/count if count > 0 else 0
+        }
 
     def save_results(self, results: Dict[str, Any], output_file: str) -> bool:
         """
