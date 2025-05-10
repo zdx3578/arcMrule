@@ -20,7 +20,7 @@ class ObjectMatcher:
         Args:
             debug_print: 调试打印函数（可选）
         """
-        self.debug_print = debug_print
+        self.debug_print = print
         self.debug = debug_print
 
     def analyze_diff_mapping_with_weights(self, pair_id, input_grid, output_grid, diff_in, diff_out,
@@ -43,7 +43,7 @@ class ObjectMatcher:
         diff_in_obj_infos = input_obj_infos
         diff_out_obj_infos = output_obj_infos
 
-        self.debug_print = debug
+        self.debug_print = print
         self.debug = debug
 
         if self.debug_print:

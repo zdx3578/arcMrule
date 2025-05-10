@@ -47,7 +47,7 @@ class PatternAnalyzer:
             "color_mappings": common_color_mappings,
             "position_changes": common_position_changes
         }
-        print("共有模式分析结果：", common_patterns)
+        # print("共有模式分析结果：", common_patterns)
         return common_patterns
 
     def _find_common_shape_transformations(self, mapping_rules):

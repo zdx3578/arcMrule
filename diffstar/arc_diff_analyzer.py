@@ -88,7 +88,8 @@ class ObjInfo:
         self.main_color = self._get_main_color()
 
         # 生成唯一ID
-        self.obj_id = f"{pair_id}_{in_or_out}_{hash(self.obj_000)}"
+        # self.obj_id = f"{pair_id}_{in_or_out}_{hash(self.obj_000)}"
+        self.obj_id = f"{pair_id}_{in_or_out}_{hash(self.obj_000)}_{self.top}_{self.left}"
 
         # 转换后的对象变体
         self.rotated_variants = self._generate_rotated_variants()
