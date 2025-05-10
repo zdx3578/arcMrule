@@ -5,6 +5,8 @@ import sys
 import logging
 import traceback
 import cgitb
+import time
+import subprocess
 
 # 导入增强型差异分析器
 # from diffstar_weighted_arc_analyzer import WeightedARCDiffAnalyzer
@@ -52,6 +54,42 @@ class WeightedARCSolver:
     def find_data_dir(self):
         """查找可用的数据目录路径"""
         # 定义多个可能的路径
+        code_paths = [
+            '/kaggle/input/arc-prize-2025',
+            '/Users/zhangdexiang/github/VSAHDC/arcMrule',
+            '/Users/zhangdexiang/github/VSAHDC/arcv2',
+            '/home/zdx/github/VSAHDC/arcv2',
+            "/home/zdx/github/VSAHDC/arcMrule",
+        ]
+        for path in code_paths:
+            if os.path.exists(path):
+                try:
+                    if self.debug:
+                        print(f"正在检查代码仓库: {path}")
+
+                    # 使用subprocess代替os.system来捕获输出
+                    result = subprocess.run(
+                        f'cd {path} && git pull',
+                        shell=True,
+                        capture_output=True,
+                        text=True
+                    )
+
+                    # 分析输出结果判断是否有更新
+                    output = result.stdout.strip()
+                    if self.debug:
+                        print(f"Git更新结果: {output}")
+
+                    # 如果不包含"Already up to date."或中文"已经是最新"，说明代码被更新了
+                    if "Already up to date." not in output and "已经是最新" not in output and output:
+                        print(f"代码仓库 {path} 已更新，程序将退出以加载新代码")
+                        sys.exit(0)  # 退出程序，返回状态码0表示正常退出
+
+                except Exception as e:
+                    print(f"检查代码仓库更新失败: {path}, 错误: {e}")
+
+        time.sleep(0.001)
+
         data_paths = [
             '/kaggle/input/arc-prize-2025',
             '/Users/zhangdexiang/github/ARC-AGI-2/arc-prize-2025',
@@ -497,8 +535,8 @@ class WeightedARCSolver:
             if limit is not None and count >= limit:
                 break
 
-            # if task_id != '00d62c1b':
-            #     continue
+            if task_id != '00d62c1b':
+                continue
 
             task_data = {
                 'task': task,
