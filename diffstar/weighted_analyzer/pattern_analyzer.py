@@ -20,27 +20,27 @@ class PatternAnalyzer:
         """
         self.debug_print = debug_print
 
-    def analyze_common_patterns(self, mapping_rules):
+    def analyze_common_patterns(self, oneInOut_mapping_rules):
         """
         分析多对训练数据的共有模式，考虑权重因素
 
         Args:
-            mapping_rules: 映射规则列表
+            oneInOut_mapping_rules: 映射规则列表
 
         Returns:
             共有模式字典
         """
-        if not mapping_rules:
+        if not oneInOut_mapping_rules:
             return {}
 
         # 分析共有的形状变换模式
-        common_shape_transformations = self._find_common_shape_transformations(mapping_rules)
+        common_shape_transformations = self._find_common_shape_transformations(oneInOut_mapping_rules)
 
         # 分析共有的颜色映射模式
-        common_color_mappings = self._find_common_color_mappings(mapping_rules)
+        common_color_mappings = self._find_common_color_mappings(oneInOut_mapping_rules)
 
         # 分析共有的位置变化模式
-        common_position_changes = self._find_common_position_changes(mapping_rules)
+        common_position_changes = self._find_common_position_changes(oneInOut_mapping_rules)
 
         common_patterns = {
             "shape_transformations": common_shape_transformations,
@@ -50,19 +50,19 @@ class PatternAnalyzer:
         # print("共有模式分析结果：", common_patterns)
         return common_patterns
 
-    def _find_common_shape_transformations(self, mapping_rules):
+    def _find_common_shape_transformations(self, oneInOut_mapping_rules):
         """
         寻找共有的形状变换模式，考虑权重
 
         Args:
-            mapping_rules: 映射规则列表
+            oneInOut_mapping_rules: 映射规则列表
 
         Returns:
             共有形状变换模式列表
         """
         # 收集所有形状变换
         all_transformations = []
-        for rule in mapping_rules:
+        for rule in oneInOut_mapping_rules:
             for transform in rule.get("shape_transformations", []):
                 # 添加权重信息，如果有的话
                 if "weight_in" in transform and "weight_out" in transform:
@@ -102,12 +102,12 @@ class PatternAnalyzer:
         # 按加权得分和出现次数排序
         return sorted(common_transforms, key=lambda x: (x["weight_score"], x["count"]), reverse=True)
 
-    def _find_common_color_mappings(self, mapping_rules):
+    def _find_common_color_mappings(self, oneInOut_mapping_rules):
         """
         寻找共有的颜色映射模式，考虑权重
 
         Args:
-            mapping_rules: 映射规则列表
+            oneInOut_mapping_rules: 映射规则列表
 
         Returns:
             共有颜色映射模式字典
@@ -115,7 +115,7 @@ class PatternAnalyzer:
         # 收集所有颜色映射
         all_mappings = defaultdict(list)
 
-        for rule in mapping_rules:
+        for rule in oneInOut_mapping_rules:
             for from_color, mapping in rule.get("color_mappings", {}).items():
                 if isinstance(mapping, dict) and "to_color" in mapping:
                     # 新格式：包含权重
@@ -129,7 +129,7 @@ class PatternAnalyzer:
 
         # 找出共有的映射
         common_mappings = {}
-        total_examples = len(mapping_rules)
+        total_examples = len(oneInOut_mapping_rules)
 
         for (from_color, to_color), weights in all_mappings.items():
             if len(weights) > 1:  # 至少在两个示例中出现
@@ -180,19 +180,19 @@ class PatternAnalyzer:
             "patterns": color_patterns
         }
 
-    def _find_common_position_changes(self, mapping_rules):
+    def _find_common_position_changes(self, oneInOut_mapping_rules):
         """
         寻找共有的位置变化模式，考虑权重
 
         Args:
-            mapping_rules: 映射规则列表
+            oneInOut_mapping_rules: 映射规则列表
 
         Returns:
             共有位置变化模式列表
         """
         # 收集所有位置变化
         all_changes = []
-        for rule in mapping_rules:
+        for rule in oneInOut_mapping_rules:
             for change in rule.get("position_changes", []):
                 # 添加权重得分
                 if "weight_in" in change and "weight_out" in change:

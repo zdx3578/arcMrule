@@ -78,24 +78,24 @@ class ARCRelationshipLibraries:
         self.__init__(self.debug, self.debug_print)
         # self._cached_all_objects = None  # 清除缓存
 
-    def build_libraries_from_data(self, mapping_rules, all_objects):
+    def build_libraries_from_data(self, oneInOut_mapping_rules, all_objects):
         """
         从分析结果构建所有关系库
 
         Args:
-            mapping_rules: 映射规则列表
+            oneInOut_mapping_rules: 映射规则列表
             all_objects: 所有对象信息
         """
         if self.debug:
             self.debug_print("\n\n\n\n开始构建多维度关系库...\n\n\n")
 
-        self.total_pairs = len(mapping_rules)
+        self.total_pairs = len(oneInOut_mapping_rules)
 
         # 1. 首先处理所有对象，建立基础属性库
         self._build_object_attribute_libraries(all_objects)
 
         # 2. 处理所有映射规则，建立操作库
-        self._build_operation_libraries(mapping_rules)
+        self._build_operation_libraries(oneInOut_mapping_rules)
 
         # 3. 建立属性-操作关系库
         self._build_attribute_operation_maps()
@@ -224,14 +224,14 @@ class ARCRelationshipLibraries:
         except AttributeError:
             pass
 
-    def _build_operation_libraries(self, mapping_rules):
+    def _build_operation_libraries(self, oneInOut_mapping_rules):
         """
         构建操作库
 
         Args:
-            mapping_rules: 映射规则列表
+            oneInOut_mapping_rules: 映射规则列表
         """
-        for rule in mapping_rules:
+        for rule in oneInOut_mapping_rules:
             pair_id = rule.get("pair_id")
 
             # 检查是否有输入到输出的转换规则

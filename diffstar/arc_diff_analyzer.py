@@ -452,7 +452,7 @@ class ARCDiffAnalyzer:
         """
         self.train_pairs = []  # 存储(input_grid, output_grid)对
         self.diff_pairs = []   # 存储(diff_in, diff_out)对
-        self.mapping_rules = []  # 每对数据的映射规则
+        self.oneInOut_mapping_rules = []  # 每对数据的映射规则
         self.common_patterns = {}  # 共有模式
 
         self.test_pairs = []
@@ -594,7 +594,7 @@ class ARCDiffAnalyzer:
             input_obj_infos, output_obj_infos, diff_in_obj_infos, diff_out_obj_infos
         )
 
-        self.mapping_rules.append(mapping_rule)
+        self.oneInOut_mapping_rules.append(mapping_rule)
 
         if self.debug:
             self._debug_save_json(mapping_rule, f"mapping_rule_{pair_id}")
@@ -827,7 +827,7 @@ class ARCDiffAnalyzer:
         if self.debug:
             self._debug_print("开始分析共有模式")
 
-        if not self.mapping_rules:
+        if not self.oneInOut_mapping_rules:
             return {}
 
         # 分析共有的形状变换模式
@@ -861,7 +861,7 @@ class ARCDiffAnalyzer:
         """寻找共有的形状变换模式"""
         # 收集所有形状变换
         all_transformations = []
-        for rule in self.mapping_rules:
+        for rule in self.oneInOut_mapping_rules:
             for transform in rule.get("shape_transformations", []):
                 all_transformations.append(transform)
 
@@ -902,7 +902,7 @@ class ARCDiffAnalyzer:
         all_mappings = {}
 
         # 收集所有颜色映射
-        for rule in self.mapping_rules:
+        for rule in self.oneInOut_mapping_rules:
             for from_color, to_color in rule["color_mappings"].items():
                 key = (from_color, to_color)
                 if key not in all_mappings:
@@ -911,7 +911,7 @@ class ARCDiffAnalyzer:
 
         # 找出共有的映射
         common_mappings = {}
-        total_examples = len(self.mapping_rules)
+        total_examples = len(self.oneInOut_mapping_rules)
 
         for (from_color, to_color), count in all_mappings.items():
             if count > 1:  # 至少在两个示例中出现
@@ -949,7 +949,7 @@ class ARCDiffAnalyzer:
         """寻找共有的位置变化模式"""
         # 收集所有位置变化
         all_changes = []
-        for rule in self.mapping_rules:
+        for rule in self.oneInOut_mapping_rules:
             for change in rule.get("position_changes", []):
                 all_changes.append(change)
 
@@ -1003,7 +1003,7 @@ class ARCDiffAnalyzer:
         """寻找共有的部分-整体关系模式"""
         # 收集所有部分-整体关系变化
         all_changes = []
-        for rule in self.mapping_rules:
+        for rule in self.oneInOut_mapping_rules:
             for change in rule.get("part_whole_relationships", []):
                 all_changes.append(change)
 

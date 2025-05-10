@@ -220,7 +220,7 @@ class WeightedARCDiffAnalyzer(ARCDiffAnalyzer):
             input_obj_infos, output_obj_infos, diff_in_obj_infos, diff_out_obj_infos,self.debug
         )
 
-        self.mapping_rules.append(mapping_rule)
+        self.oneInOut_mapping_rules.append(mapping_rule)
 
         # # 新增: 提取基于形状的颜色变化规则
         # shape_color_rule = self._extract_shape_color_rules(
@@ -228,13 +228,13 @@ class WeightedARCDiffAnalyzer(ARCDiffAnalyzer):
         #     diff_in_obj_infos, diff_out_obj_infos
         # )
         # if shape_color_rule:
-        #     self.mapping_rules.append(shape_color_rule)
+        #     self.oneInOut_mapping_rules.append(shape_color_rule)
 
         # # 新增: 提取更通用的属性依赖规则
         # attr_rules = self._extract_attribute_dependency_rules(
         #     pair_id, input_obj_infos, output_obj_infos
         # )
-        # self.mapping_rules.extend(attr_rules)
+        # self.oneInOut_mapping_rules.extend(attr_rules)
 
 
         if self.debug:
@@ -651,13 +651,13 @@ class WeightedARCDiffAnalyzer(ARCDiffAnalyzer):
             带权重的通用模式和针对测试数据的优化规则
         """
         print("\n\n\n\n\n\nCOMMON ommon_patterns_with_weights开始分析共同模式\n\n")
-        if not self.mapping_rules:
+        if not self.oneInOut_mapping_rules:
             return {}
 
         # 1. 初始化并构建关系库
         from arc_relationship_libraries import ARCRelationshipLibraries
         relationship_libs = ARCRelationshipLibraries(debug=self.debug, debug_print=self._debug_print)
-        relationship_libs.build_libraries_from_data(self.mapping_rules, self.all_objects)
+        relationship_libs.build_libraries_from_data(self.oneInOut_mapping_rules, self.all_objects)
 
         # 2. 查找跨数据对模式
         cross_pair_patterns = relationship_libs.find_patterns_across_pairs()
@@ -691,7 +691,7 @@ class WeightedARCDiffAnalyzer(ARCDiffAnalyzer):
             print(f"\n\n\n\n\n ! ! pairs : enhanced_pattern_meta_analyzer : advanced_rules : 找到 {len(advanced_rules)} 个增强规则:\n\n\n", advanced_rules)
 
         # 5. 调用原始模式分析器获取基本模式
-        basic_patterns = self.pattern_analyzer.analyze_common_patterns(self.mapping_rules)
+        basic_patterns = self.pattern_analyzer.analyze_common_patterns(self.oneInOut_mapping_rules)
 
         # 6. 组合所有结果
         combined_results = {
@@ -888,7 +888,7 @@ class WeightedARCDiffAnalyzer(ARCDiffAnalyzer):
         Returns:
             带权重的通用模式与高级规则
         """
-        if not self.mapping_rules:
+        if not self.oneInOut_mapping_rules:
             return {}
 
         # 1. 初始化多维度关系库系统
@@ -896,7 +896,7 @@ class WeightedARCDiffAnalyzer(ARCDiffAnalyzer):
         relationship_libs = ARCRelationshipLibraries(debug=self.debug, debug_print=self._debug_print)
 
         # 2. 构建关系库
-        relationship_libs.build_libraries_from_data(self.mapping_rules, self.all_objects)
+        relationship_libs.build_libraries_from_data(self.oneInOut_mapping_rules, self.all_objects)
 
         # 3. 查找跨数据对的模式
         cross_pair_patterns = relationship_libs.find_patterns_across_pairs()
@@ -907,7 +907,7 @@ class WeightedARCDiffAnalyzer(ARCDiffAnalyzer):
         high_level_rules = meta_analyzer.process_patterns(cross_pair_patterns)
 
         # 5. 调用原始的模式分析器获取基本模式
-        # basic_patterns = self.pattern_analyzer.analyze_common_patterns(self.mapping_rules)
+        # basic_patterns = self.pattern_analyzer.analyze_common_patterns(self.oneInOut_mapping_rules)
 
         # 6. 结合基本模式、跨数据对模式和高级规则
         combined_patterns = {
@@ -1000,7 +1000,7 @@ class WeightedARCDiffAnalyzer(ARCDiffAnalyzer):
             带权重的共同模式字典
         """
         print("\n\n\n\nCOMMON ommon_patterns_with_weights开始分析共同模式\n\n")
-        if not self.mapping_rules:
+        if not self.oneInOut_mapping_rules:
             return {}
 
         # 1. 初始化多维度关系库系统
@@ -1008,13 +1008,13 @@ class WeightedARCDiffAnalyzer(ARCDiffAnalyzer):
         relationship_libs = ARCRelationshipLibraries(debug=self.debug, debug_print=self._debug_print)
 
         # 2. 构建关系库
-        relationship_libs.build_libraries_from_data(self.mapping_rules, self.all_objects)
+        relationship_libs.build_libraries_from_data(self.oneInOut_mapping_rules, self.all_objects)
 
         # 3. 查找跨数据对的模式
         cross_pair_patterns = relationship_libs.find_patterns_across_pairs()
 
         # 4. 调用原始的模式分析器获取基本模式
-        # basic_patterns = self.pattern_analyzer.analyze_common_patterns(self.mapping_rules)
+        # basic_patterns = self.pattern_analyzer.analyze_common_patterns(self.oneInOut_mapping_rules)
 
         # 5. 结合基本模式和跨数据对模式
         combined_patterns = {
