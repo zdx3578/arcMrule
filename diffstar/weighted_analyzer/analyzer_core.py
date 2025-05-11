@@ -684,7 +684,7 @@ class WeightedARCDiffAnalyzer(ARCDiffAnalyzer):
 
         # 4. 使用增强版模式学习器提取规则并匹配测试数据
         from enhanced_pattern_meta_analyzer import EnhancedPatternMetaAnalyzer
-        meta_analyzer = EnhancedPatternMetaAnalyzer(debug=self.debug, debug_print=self._debug_print, total_train_pairs=len(task['train']))
+        meta_analyzer = EnhancedPatternMetaAnalyzer(debug=self.debug, debug_print=self._debug_print, task=task)
         advanced_rules = meta_analyzer.process_patterns(cross_pair_patterns, test_features)
 
         if self.debug:

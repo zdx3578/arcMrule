@@ -17,11 +17,11 @@ class EnhancedPatternMetaAnalyzer:
     增强版模式元分析器：整合全局和条件模式，匹配测试形状
     """
 
-    def __init__(self, debug=False, debug_print=None, total_train_pairs=None):
+    def __init__(self, debug=False, debug_print=None, task=None):
         """初始化增强版模式元分析器"""
         self.debug = debug
         self.debug_print = debug_print
-
+        total_train_pairs = len(task['train'])
         self.rule_builder = RuleBuilder(total_train_pairs)
 
         # 存储基础模式
