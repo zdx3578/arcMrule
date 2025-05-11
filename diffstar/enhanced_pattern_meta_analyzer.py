@@ -9,15 +9,20 @@ from collections import defaultdict
 import numpy as np
 from typing import List, Dict, Any, Tuple, Set, Optional
 
+from arcMrule.diffstar.patterlib.rule_builder import RuleBuilder
+
+
 class EnhancedPatternMetaAnalyzer:
     """
     增强版模式元分析器：整合全局和条件模式，匹配测试形状
     """
 
-    def __init__(self, debug=False, debug_print=None):
+    def __init__(self, debug=False, debug_print=None, total_train_pairs=None):
         """初始化增强版模式元分析器"""
         self.debug = debug
         self.debug_print = debug_print
+
+        self.rule_builder = RuleBuilder(total_train_pairs)
 
         # 存储基础模式
         self.base_patterns = []
@@ -124,7 +129,7 @@ class EnhancedPatternMetaAnalyzer:
                 if operation:
                     self.color_to_info[color]['operations'][operation].append(pattern)
 
-    def _extract_global_operation_rules(self):
+    def _extract_global_operation_rules0(self):
         """提取全局操作规则，如'移除所有颜色为X的对象'"""
         # 处理颜色操作模式
         for color, info in self.color_to_info.items():
@@ -151,7 +156,70 @@ class EnhancedPatternMetaAnalyzer:
         # 按覆盖率排序
         self.global_operation_rules.sort(key=lambda x: (x['coverage'], x['confidence']), reverse=True)
 
+    def _extract_global_operation_rules(self):
+        """提取全局操作规则，如'移除所有颜色为X的对象'"""
+        # 处理颜色操作模式
+        for color, info in self.color_to_info.items():
+            for operation, patterns in info['operations'].items():
+                if patterns:  # 确保有模式支持此操作
+                    # 计算操作覆盖率
+                    all_supporting_pairs = set()
+                    for pattern in patterns:
+                        all_supporting_pairs.update(pattern.get('supporting_pairs', []))
+
+                    # 创建全局规则
+                    rule = self.rule_builder.create_color_rule(
+                        color=color,
+                        operation=operation,
+                        supporting_pairs=list(all_supporting_pairs),
+                        patterns=patterns,
+                        confidence=max(p.get('confidence', 0) for p in patterns),
+                        description=f"对颜色为{color}的所有对象执行{operation}操作"
+                    )
+
+                    self.global_operation_rules.append(rule)
+
+        # 按覆盖率排序
+        self.global_operation_rules.sort(key=lambda x: (x['coverage'], x['confidence']), reverse=True)
+
     def _extract_conditional_rules(self):
+        """提取条件规则，如'当移除形状X时，将颜色Y变为Z'"""
+        # 处理条件模式
+        for pattern in self.patterns_by_type.get('conditional_pattern', []):
+            subtype = pattern.get('subtype')
+            if subtype == 'removal_color_change':
+                condition = pattern.get('condition', {})
+                effect = pattern.get('effect', {})
+
+                if 'shape_hash' in condition and 'color_change' in effect:
+                    shape_hash = condition.get('shape_hash')
+                    from_color = effect['color_change'].get('from_color')
+                    to_color = effect['color_change'].get('to_color')
+
+                    if shape_hash and from_color is not None and to_color is not None:
+                        rule = self.rule_builder.create_conditional_rule(
+                            condition={
+                                'shape_hash': shape_hash,
+                                'operation': 'remove'
+                            },
+                            effect={
+                                'from_color': from_color,
+                                'to_color': to_color
+                            },
+                            supporting_pairs=pattern.get('supporting_pairs', []),
+                            confidence=pattern.get('confidence', 0),
+                            description=pattern.get('description', f"当移除形状{shape_hash}时，将颜色{from_color}变为{to_color}")
+                        )
+
+                        self.conditional_rules.append(rule)
+
+        # 按支持对集合的大小和置信度排序
+        self.conditional_rules.sort(
+            key=lambda x: (len(x.get('supporting_pairs', [])), x.get('confidence', 0)),
+            reverse=True
+        )
+
+    def _extract_conditional_rules0(self):
         """提取条件规则，如'当移除形状X时，将颜色Y变为Z'"""
         # 处理条件模式
         for pattern in self.patterns_by_type.get('conditional_pattern', []):
@@ -190,6 +258,55 @@ class EnhancedPatternMetaAnalyzer:
         )
 
     def _integrate_rules(self):
+        """整合全局操作规则和条件规则，创建复合规则"""
+        # 按颜色分组条件规则
+        color_to_conditional_rules = defaultdict(list)
+        for rule in self.conditional_rules:
+            from_color = rule['effect']['from_color']
+            color_to_conditional_rules[from_color].append(rule)
+
+        # 查找可以组合的规则
+        for global_rule in self.global_operation_rules:
+            color = global_rule.get('color')
+            operation = global_rule.get('operation')
+
+            # 如果是移除操作，查找相关的条件规则
+            if operation == 'removed' and color in color_to_conditional_rules:
+                related_conditional_rules = color_to_conditional_rules[color]
+
+                # 创建组合规则
+                all_supporting_pairs = set(global_rule.get('supporting_pairs', []))
+                for cond_rule in related_conditional_rules:
+                    all_supporting_pairs.update(cond_rule.get('supporting_pairs', []))
+
+                composite_rule = self.rule_builder.create_composite_rule(
+                    base_rule={
+                        'type': 'global_color_operation',
+                        'color': color,
+                        'operation': operation
+                    },
+                    conditional_rules=related_conditional_rules,
+                    supporting_pairs=list(all_supporting_pairs),
+                    confidence=global_rule.get('confidence', 0),
+                    description=f"处理颜色为{color}的对象的综合规则",
+                    coverage_score=len(all_supporting_pairs)  # 添加覆盖率分数
+                )
+
+                # 计算综合置信度
+                if related_conditional_rules:
+                    avg_cond_confidence = sum(r.get('confidence', 0) for r in related_conditional_rules) / len(related_conditional_rules)
+                    composite_rule['confidence'] = (global_rule.get('confidence', 0) + avg_cond_confidence) / 2
+
+                # 添加到复合规则列表
+                self.composite_rules.append(composite_rule)
+
+        # 按覆盖率和置信度排序
+        self.composite_rules.sort(
+            key=lambda x: (x.get('coverage_score', 0), x.get('confidence', 0)),
+            reverse=True
+        )
+
+    def _integrate_rules0(self):
         """
         整合全局操作规则和条件规则，创建复合规则
 
