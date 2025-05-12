@@ -9,10 +9,12 @@ from collections import defaultdict
 import numpy as np
 from typing import List, Dict, Any, Tuple, Set, Optional
 
+# from arcMrule.diffstar.patterlib.rule_builder import RuleBuilder
 from arcMrule.diffstar.patterlib.rule_builder import RuleBuilder
+from arcMrule.diffstar.patterlib.pattern_analysis_mixin import PatternAnalysisMixin
 
-
-class EnhancedPatternMetaAnalyzer:
+# class EnhancedPatternMetaAnalyzer:
+class EnhancedPatternMetaAnalyzer(PatternAnalysisMixin):
     """
     增强版模式元分析器：整合全局和条件模式，匹配测试形状
     """
@@ -21,6 +23,7 @@ class EnhancedPatternMetaAnalyzer:
         """初始化增强版模式元分析器"""
         self.debug = debug
         self.debug_print = debug_print
+        self.task = task
         total_train_pairs = len(task['train'])
         self.rule_builder = RuleBuilder(total_train_pairs)
 
@@ -156,7 +159,7 @@ class EnhancedPatternMetaAnalyzer:
         # 按覆盖率排序
         self.global_operation_rules.sort(key=lambda x: (x['coverage'], x['confidence']), reverse=True)
 
-    def _extract_global_operation_rules(self):
+    def _extract_global_operation_rules00(self):
         """提取全局操作规则，如'移除所有颜色为X的对象'"""
         # 处理颜色操作模式
         for color, info in self.color_to_info.items():
@@ -181,6 +184,45 @@ class EnhancedPatternMetaAnalyzer:
 
         # 按覆盖率排序
         self.global_operation_rules.sort(key=lambda x: (x['coverage'], x['confidence']), reverse=True)
+
+    def _extract_global_operation_rules(self):
+        """提取全局操作规则，如'移除所有颜色为X的对象'"""
+        # 处理颜色操作模式
+        for color, info in self.color_to_info.items():
+            for operation, patterns in info['operations'].items():
+                if patterns:  # 确保有模式支持此操作
+                    # 计算操作覆盖率
+                    all_supporting_pairs = set()
+                    for pattern in patterns:
+                        all_supporting_pairs.update(pattern.get('supporting_pairs', []))
+
+                    # 创建全局规则
+                    rule = self.rule_builder.create_color_rule(
+                        color=color,
+                        operation=operation,
+                        supporting_pairs=list(all_supporting_pairs),
+                        patterns=patterns,
+                        confidence=max(p.get('confidence', 0) for p in patterns),
+                        description=f"对颜色为{color}的所有对象执行{operation}操作"
+                    )
+
+                    # 如果是添加操作并且规则适用于所有训练样例，分析背后的模式
+                    if operation == 'added' and rule.get('supporting_pairs_ifisallpair', False):
+                        # 分析添加操作背后可能的模式
+                        underlying_pattern = self._analyze_underlying_pattern_for_addition(color, rule)
+                        if underlying_pattern:
+                            rule['underlying_pattern'] = underlying_pattern
+                            rule['description'] = f"{rule['description']} (基于{underlying_pattern['pattern_type']}模式)"
+                            if self.debug:
+                                self.debug_print(f"发现颜色{color}的添加操作可能基于{underlying_pattern['pattern_type']}模式")
+
+                    self.global_operation_rules.append(rule)
+
+        # 按覆盖率排序
+        self.global_operation_rules.sort(key=lambda x: (x['coverage'], x['confidence']), reverse=True)
+
+
+
 
     def _extract_conditional_rules(self):
         """提取条件规则，如'当移除形状X时，将颜色Y变为Z'"""
