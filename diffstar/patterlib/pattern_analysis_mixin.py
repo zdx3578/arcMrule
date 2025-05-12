@@ -2,6 +2,274 @@
 class PatternAnalysisMixin:
 
     def _analyze_underlying_pattern_for_addition(self, target_color, rule):
+        """分析添加操作背后可能存在的模式，以对象为单位分析，评估模式通用性"""
+        if not hasattr(self, 'task') or not self.task:
+            return None  # 如果没有训练任务数据，无法分析
+
+        # 收集所有支持该规则的训练示例
+        supporting_examples = []
+        for pair_idx in rule.get('supporting_pairs', []):
+            if pair_idx < len(self.task['train']):
+                supporting_examples.append({
+                    'example': self.task['train'][pair_idx],
+                    'pair_idx': pair_idx
+                })
+
+        if not supporting_examples:
+            return None
+
+        # 模式类型及其权重定义
+        pattern_types = {
+            'four_box_pattern': {'weight': 1.5, 'threshold': 0.7},  # 4Box模式权重更高，识别阈值更低
+            'symmetry_pattern': {'weight': 1.2, 'threshold': 0.8},
+            'proximity_pattern': {'weight': 1.0, 'threshold': 0.8},
+            'alignment_pattern': {'weight': 1.0, 'threshold': 0.8}
+        }
+
+        # 初始化模式分析结果
+        pattern_candidates = {
+            ptype: {
+                'instances': [],
+                'confidence': 0,
+                'example_coverage': {}, # 记录每个示例的覆盖情况
+                'weight': data['weight'],
+                'threshold': data['threshold']
+            } for ptype, data in pattern_types.items()
+        }
+
+        # 对每个示例，分析添加对象与可能的模式
+        for idx, example_data in enumerate(supporting_examples):
+            example = example_data['example']
+            pair_idx = example_data['pair_idx']
+
+            input_grid = example['input']
+            output_grid = example['output']
+
+            # 找出所有新添加的目标颜色位置
+            added_positions = self._find_added_positions(input_grid, output_grid, target_color)
+            if not added_positions:
+                continue
+
+            # 将相连的添加像素识别为对象
+            added_objects = self._find_connected_objects(added_positions)
+
+            if self.debug:
+                self.debug_print(f"示例 {idx} (pair_idx={pair_idx}): 发现 {len(added_positions)} 个添加像素，形成 {len(added_objects)} 个对象")
+
+            # 1. 检查4Box模式
+            fourbox_results = self._check_objects_for_4box_patterns(input_grid, added_objects, added_positions)
+            if fourbox_results:
+                for result in fourbox_results:
+                    result['example_idx'] = idx
+                    result['pair_idx'] = pair_idx
+                pattern_candidates['four_box_pattern']['instances'].extend(fourbox_results)
+                pattern_candidates['four_box_pattern']['example_coverage'][idx] = len(fourbox_results)
+
+            # 可以类似地添加其他模式检查...
+
+        # 评估模式通用性和置信度
+        for pattern_type, data in pattern_candidates.items():
+            # 如果没有实例，跳过
+            if not data['instances']:
+                continue
+
+            # 计算示例覆盖率 - 多少比例的示例支持此模式
+            examples_count = len(supporting_examples)
+            examples_with_pattern = len(data['example_coverage'])
+            example_coverage_ratio = examples_with_pattern / examples_count if examples_count > 0 else 0
+
+            # 计算对象覆盖率 - 多少比例的添加对象符合此模式
+            total_objects = sum(len(self._find_connected_objects(self._find_added_positions(ex['example']['input'],
+                                                                                        ex['example']['output'],
+                                                                                        target_color)))
+                            for ex in supporting_examples)
+            pattern_objects = len(data['instances'])
+            object_coverage_ratio = pattern_objects / total_objects if total_objects > 0 else 0
+
+            # 计算加权置信度
+            raw_confidence = (example_coverage_ratio * 0.7) + (object_coverage_ratio * 0.3)
+            data['confidence'] = raw_confidence * data['weight']
+
+            # 记录覆盖指标
+            data['example_coverage_ratio'] = example_coverage_ratio
+            data['object_coverage_ratio'] = object_coverage_ratio
+
+            if self.debug:
+                self.debug_print(f"模式 {pattern_type}: 示例覆盖率 {example_coverage_ratio:.2f}, "
+                            f"对象覆盖率 {object_coverage_ratio:.2f}, "
+                            f"加权置信度 {data['confidence']:.2f}")
+
+        # 找出置信度最高的模式
+        valid_patterns = [(ptype, data) for ptype, data in pattern_candidates.items()
+                        if data['instances'] and data['confidence'] >= data['threshold']]
+
+        if not valid_patterns:
+            return None
+
+        best_pattern = max(valid_patterns, key=lambda x: x[1]['confidence'])
+        pattern_type, pattern_data = best_pattern
+
+        return self._create_enhanced_pattern_description(pattern_type, pattern_data, target_color)
+
+    def _check_objects_for_4box_patterns(self, grid, objects, all_positions_set):
+        """
+        检查添加对象是否与4Box模式相关
+
+        Args:
+            grid: 输入网格
+            objects: 添加对象的列表，每个元素是一组相连的位置坐标
+            all_positions_set: 所有添加位置的集合
+
+        Returns:
+            4Box模式实例列表
+        """
+        if not isinstance(all_positions_set, set):
+            all_positions_set = set(all_positions_set)
+
+        height = len(grid)
+        width = len(grid[0]) if height > 0 else 0
+
+        fourbox_instances = []
+
+        # 对每个对象分析其边界周围的颜色分布
+        for obj_idx, obj_positions in enumerate(objects):
+            # 找出对象边界
+            obj_boundary = self._find_object_boundary(obj_positions, width, height)
+
+            # 分析边界周围的颜色分布
+            surrounding_colors_count = self._analyze_surrounding_colors(obj_boundary, all_positions_set, grid)
+
+            # 检查是否有颜色在多个方向上包围对象
+            best_surrounding_color = None
+            max_direction_count = 0
+            max_surrounding_count = 0
+            direction_counts = None
+
+            for color, counts in surrounding_colors_count.items():
+                # 计算这个颜色出现在多少个方向
+                directions_with_color = sum(1 for count in counts.values() if count > 0)
+                total_count = sum(counts.values())
+
+                # 选择出现在最多方向的颜色
+                if directions_with_color > max_direction_count or (directions_with_color == max_direction_count and total_count > max_surrounding_count):
+                    max_direction_count = directions_with_color
+                    max_surrounding_count = total_count
+                    best_surrounding_color = color
+                    direction_counts = counts.copy()
+
+            # 如果至少有2个方向被同一颜色包围，认为符合4Box模式
+            if max_direction_count >= 2 and best_surrounding_color is not None:
+                # 确定对象的中心位置和主要颜色
+                center_x = sum(x for x, y in obj_positions) / len(obj_positions)
+                center_y = sum(y for x, y in obj_positions) / len(obj_positions)
+                center_pos = (int(center_x), int(center_y))
+
+                # 查找对象所在区域在原网格中的颜色
+                original_colors = {}
+                for x, y in obj_positions:
+                    if 0 <= x < width and 0 <= y < height:
+                        orig_color = grid[y][x]
+                        if orig_color not in original_colors:
+                            original_colors[orig_color] = 0
+                        original_colors[orig_color] += 1
+
+                # 确定主要颜色
+                main_color = max(original_colors.items(), key=lambda x: x[1])[0] if original_colors else None
+
+                # 计算包围度 - 被包围边界点占总边界点的比例
+                boundary_coverage = max_surrounding_count / len(obj_boundary) if obj_boundary else 0
+
+                # 根据方向计算4Box完整度系数
+                completeness_factor = max_direction_count / 4.0  # 满分为1.0
+
+                # 添加发现的实例
+                fourbox_instances.append({
+                    'object_index': obj_idx,
+                    'object_size': len(obj_positions),
+                    'center_position': center_pos,
+                    'center_color': main_color,
+                    'surrounding_color': best_surrounding_color,
+                    'direction_counts': direction_counts,
+                    'total_directions': max_direction_count,
+                    'is_complete': max_direction_count == 4,
+                    'boundary_coverage': boundary_coverage,
+                    'completeness_factor': completeness_factor,
+                    'pattern_strength': boundary_coverage * completeness_factor,  # 综合强度评分
+                    'object_positions': list(obj_positions)  # 记录对象位置
+                })
+
+        # 按模式强度排序
+        fourbox_instances.sort(key=lambda x: x['pattern_strength'], reverse=True)
+        return fourbox_instances
+
+    def _create_enhanced_pattern_description(self, pattern_type, pattern_data, target_color):
+        """创建增强的模式描述，包括通用性和置信度指标"""
+        instances = pattern_data['instances']
+        confidence = pattern_data['confidence']
+        example_coverage = pattern_data.get('example_coverage_ratio', 0)
+        object_coverage = pattern_data.get('object_coverage_ratio', 0)
+
+        result = {
+            'pattern_type': pattern_type,
+            'confidence': confidence,
+            'instance_count': len(instances),
+            'example_coverage': example_coverage,
+            'object_coverage': object_coverage,
+            'is_universal': example_coverage > 0.9  # 90%以上的示例支持则视为通用规则
+        }
+
+        # 根据模式类型创建描述
+        if pattern_type == 'four_box_pattern':
+            # 分析所有实例中的主要颜色和环绕颜色
+            center_colors = {}
+            surr_colors = {}
+            complete_count = 0
+
+            for instance in instances:
+                # 统计中心颜色
+                center_color = instance.get('center_color')
+                if center_color is not None:
+                    if center_color not in center_colors:
+                        center_colors[center_color] = 0
+                    center_colors[center_color] += 1
+
+                # 统计环绕颜色
+                surr_color = instance.get('surrounding_color')
+                if surr_color is not None:
+                    if surr_color not in surr_colors:
+                        surr_colors[surr_color] = 0
+                    surr_colors[surr_color] += 1
+
+                # 统计完整4Box的数量
+                if instance.get('is_complete', False):
+                    complete_count += 1
+
+            # 找出最常见的颜色
+            main_center_color = max(center_colors.items(), key=lambda x: x[1])[0] if center_colors else None
+            main_surr_color = max(surr_colors.items(), key=lambda x: x[1])[0] if surr_colors else None
+
+            # 记录完整性比例
+            result['complete_ratio'] = complete_count / len(instances) if instances else 0
+            result['center_color'] = main_center_color
+            result['surrounding_color'] = main_surr_color
+
+            # 创建描述
+            pattern_quality = "完全" if result['complete_ratio'] > 0.8 else "部分"
+            universality = "通用" if result['is_universal'] else "部分适用的"
+
+            result['description'] = (
+                f"{universality}4Box模式：中心颜色{main_center_color}的对象被颜色{main_surr_color}"
+                f"的对象{pattern_quality}包围时，添加颜色为{target_color}的新对象"
+            )
+            result['formal_name'] = '4Box模式'
+
+        # 这里可以添加其他模式类型的处理...
+
+        return result
+
+
+
+    def _analyze_underlying_pattern_for_addition00(self, target_color, rule):
         """分析添加操作背后可能存在的模式
 
         Args:
@@ -252,7 +520,7 @@ class PatternAnalysisMixin:
 
         return alignment_instances
 
-    def _create_pattern_description(self, pattern_type, pattern_data, target_color):
+    def _create_pattern_description0(self, pattern_type, pattern_data, target_color):
         """根据模式类型和数据创建模式描述"""
         instances = pattern_data['instances']
         confidence = pattern_data['confidence']
@@ -358,7 +626,7 @@ class PatternAnalysisMixin:
 
 
 
-    def _check_for_4box_patterns(self, grid, positions):
+    def _check_for_4box_patterns00(self, grid, positions):
         """
         检查整体对象是否与4Box模式相关，将相连的添加像素视为一个整体对象
         """
