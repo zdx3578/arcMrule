@@ -132,7 +132,83 @@ class OptimizedRuleApplier:
         # return tuple(tuple(row) for row in output_grid)
         return output_grid
 
-    def apply_transformation_rules(self, input_grid, common_patterns, input_objects,
+    def detect_four_box_pattern(self, grid, rule):
+        """转发到PatternAnalysisMixin中的同名函数"""
+        # 这里您需要访问PatternAnalysisMixin实例
+        # 可以考虑在初始化时传入一个mixin实例，或者直接实现此函数
+        from arcMrule.diffstar.patterlib.pattern_analysis_mixin import PatternAnalysisMixin
+        mixin = PatternAnalysisMixin()
+        return mixin.detect_four_box_pattern(grid, rule)
+
+    def apply_four_box_pattern_rule(self, grid, rule):
+        """转发到PatternAnalysisMixin中的同名函数"""
+        from arcMrule.diffstar.patterlib.pattern_analysis_mixin import PatternAnalysisMixin
+        mixin = PatternAnalysisMixin()
+        return mixin.apply_four_box_pattern_rule(grid, rule)
+
+
+
+
+    def apply_transformation_rules(self, input_grid, common_patterns, input_objects, traditional_rule_applier=None, background_color=0):
+        """
+        应用转换规则，将输入网格转换为预测的输出网格
+
+        Args:
+            input_grid: 输入网格
+            common_patterns: 识别的共有模式
+            input_objects: 输入对象列表
+
+        Returns:
+            预测的输出网格
+        """
+        # 复制输入网格，避免修改原始数据
+        output_grid = [row[:] for row in input_grid]
+
+        # 1. 首先处理advanced_rules中的规则
+        if "advanced_rules" in common_patterns:
+            advanced_rules = common_patterns["advanced_rules"]
+
+            # 寻找带有underlying_pattern的全局规则
+            pattern_based_rules = []
+            for rule in advanced_rules.get('global_rules', []):
+                if 'underlying_pattern' in rule:
+                    pattern_based_rules.append(rule)
+
+            # 应用基于模式的规则
+            for rule in pattern_based_rules:
+                if rule.get('operation') == 'added' and 'underlying_pattern' in rule:
+                    pattern = rule['underlying_pattern']
+                    # 检查是否提供了检测和执行函数
+                    if 'detect_fun' in pattern and 'execute_function' in pattern:
+                        # 动态调用检测函数
+                        detect_func_name = pattern['detect_fun']
+                        execute_func_name = pattern['execute_function']
+
+                        if hasattr(self, detect_func_name) and hasattr(self, execute_func_name):
+                            # 创建执行规则
+                            exec_rule = {
+                                'center_color': pattern.get('center_color'),
+                                'surrounding_color': pattern.get('surrounding_color'),
+                                'target_color': rule.get('color'),
+                                'min_directions': 2 if pattern.get('complete_ratio', 0) < 0.8 else 4
+                            }
+
+                            # 执行模式特定的应用函数
+                            output_grid = getattr(self, execute_func_name)(output_grid, exec_rule)
+                            if self.debug:
+                                self.debug_print(f"应用了{pattern['pattern_type']}模式规则，添加颜色{rule['color']}的对象")
+
+        # 2. 如果没有模式规则或模式规则未处理，使用传统方法
+        if output_grid == [row[:] for row in input_grid] and traditional_rule_applier:
+            # 这里保留原有的处理逻辑，作为回退方案
+            output_grid = traditional_rule_applier.apply_transformation_rules(
+                input_grid, common_patterns, input_objects, None, self.debug
+            )
+
+        return output_grid
+
+
+    def apply_transformation_rules0(self, input_grid, common_patterns, input_objects,
                                   transformation_rules=None, traditional_rule_applier=None, background_color=0):
         """
         应用转换规则，支持优化执行计划和传统规则

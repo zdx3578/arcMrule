@@ -687,6 +687,13 @@ class WeightedARCDiffAnalyzer(ARCDiffAnalyzer):
         meta_analyzer = EnhancedPatternMetaAnalyzer(debug=self.debug, debug_print=self._debug_print, task=task)
         advanced_rules = meta_analyzer.process_patterns(cross_pair_patterns, test_features)
 
+        # 确保底层模式分析结果被包含在结果中
+        if 'global_rules' in advanced_rules:
+            for rule in advanced_rules['global_rules']:
+                if rule.get('operation') == 'added' and 'underlying_pattern' in rule:
+                    if self.debug:
+                        self._debug_print(f"发现带底层模式的添加规则: {rule['description']}")
+
         if self.debug:
             print(f"\n\n\n\n\n ! ! pairs : enhanced_pattern_meta_analyzer : advanced_rules : 找到 {len(advanced_rules)} 个增强规则:\n\n\n", advanced_rules)
 
@@ -1332,7 +1339,56 @@ class WeightedARCDiffAnalyzer(ARCDiffAnalyzer):
 
         return output_grid
 
+
     def apply_transformation_rules(self, trainortest, pair_id, input_grid, common_patterns=None, transformation_rules=None):
+        """应用转换规则到输入网格"""
+        if self.debug:
+            self._debug_print("调用转换规则应用功能")
+
+        # 使用当前的共有模式（如果未提供）
+        if common_patterns is None:
+            if not self.common_patterns:
+                self.common_patterns = self.analyze_with_test_data_matching(input_grid)
+            common_patterns = self.common_patterns
+
+        # 获取网格尺寸和复制网格
+        if isinstance(input_grid, list):
+            input_grid = tuple(tuple(row) for row in input_grid)
+
+        height, width = len(input_grid), len(input_grid[0])
+
+        # 首先应用基于模式的规则（如4Box模式）
+        # 检查是否有全局规则
+        pattern_based_output = None
+        if 'advanced_rules' in common_patterns and 'global_rules' in common_patterns['advanced_rules']:
+            # 尝试应用模式规则
+            pattern_based_output = self.execute_pattern_based_rules(
+                input_grid,
+                common_patterns['advanced_rules']['global_rules']
+            )
+
+            # 如果模式规则产生了变化，使用它作为输出
+            if pattern_based_output and pattern_based_output != [row[:] for row in input_grid]:
+                if self.debug:
+                    self._debug_print("应用了基于模式的规则，跳过传统规则应用")
+                return pattern_based_output
+
+        # 准备输入对象（如果模式规则没有生效）
+        if trainortest == 'train':
+            input_objects = self.all_objects['input'][pair_id][1]
+        else:
+            input_objects = self.all_objects['test_input'][pair_id][1]
+
+        # 委托给优化规则应用器
+        return self.optimized_rule_applier.apply_transformation_rules(
+            input_grid,
+            common_patterns,
+            input_objects,
+            traditional_rule_applier=self.rule_applier,
+            background_color=self.background_color
+        )
+
+    def apply_transformation_rules11(self, trainortest, pair_id, input_grid, common_patterns=None, transformation_rules=None):
         """
         应用提取的转换规则，将输入网格转换为预测的输出网格
 
@@ -1619,3 +1675,57 @@ class WeightedARCDiffAnalyzer(ARCDiffAnalyzer):
             self._debug_print(f"  对象 {info['obj_id']}: 权重={info['weight']}, 大小={info['size']}, 颜色={info['main_color']}")
         if len(weight_info) > 5:
             self._debug_print(f"  ... 还有 {len(weight_info) - 5} 个对象")
+
+    def execute_pattern_based_rules(self, input_grid, rules):
+        """
+        执行基于模式的规则
+
+        Args:
+            input_grid: 输入网格
+            rules: 规则列表
+
+        Returns:
+            应用规则后的输出网格
+        """
+        # 复制输入网格作为输出
+        output_grid = [row[:] for row in input_grid]
+
+        # 检查规则是否包含underlying_pattern
+        pattern_rules = [r for r in rules if 'underlying_pattern' in r]
+
+        if not pattern_rules:
+            return output_grid  # 没有基于模式的规则，返回原网格
+
+        # 处理每个基于模式的规则
+        for rule in pattern_rules:
+            pattern = rule['underlying_pattern']
+
+            # 如果有检测和执行函数字段
+            if 'detect_fun' in pattern and 'execute_function' in pattern:
+                # 获取函数名
+                detect_func_name = pattern['detect_fun']
+                execute_func_name = pattern['execute_function']
+
+                # 需要确保这些函数存在
+                from arcMrule.diffstar.patterlib.pattern_analysis_mixin import PatternAnalysisMixin
+                mixin = PatternAnalysisMixin()
+
+                if hasattr(mixin, detect_func_name) and hasattr(mixin, execute_func_name):
+                    # 创建执行规则
+                    exec_rule = {
+                        'center_color': pattern.get('center_color'),
+                        'surrounding_color': pattern.get('surrounding_color'),
+                        'target_color': rule.get('color'),
+                        'min_directions': 2 if pattern.get('complete_ratio', 0) < 0.8 else 4
+                    }
+
+                    # 执行模式检测和应用
+                    output_grid_list = [list(row) for row in output_grid]
+                    output_grid = getattr(mixin, execute_func_name)(output_grid_list, exec_rule)
+
+                    if self.debug:
+                        self._debug_print(f"应用了{pattern['pattern_type']}模式规则")
+
+        return output_grid
+
+

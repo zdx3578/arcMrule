@@ -949,8 +949,8 @@ class PatternAnalysisMixin:
         Returns:
             更新后的网格
         """
-        # 复制输入网格，避免修改原始数据
-        output_grid = [row[:] for row in grid]
+        # 确保输入网格是可修改的列表，而不是元组
+        output_grid = [list(row) for row in grid]
 
         # 检测4Box模式
         detected_patterns = self.detect_four_box_pattern(grid, rule)
