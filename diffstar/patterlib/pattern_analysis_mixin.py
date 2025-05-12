@@ -203,6 +203,88 @@ class PatternAnalysisMixin:
         return fourbox_instances
 
     def _create_enhanced_pattern_description(self, pattern_type, pattern_data, target_color):
+        """创建增强的模式描述，包括通用性和置信度指标，以及可执行规则"""
+        instances = pattern_data['instances']
+        confidence = pattern_data['confidence']
+        example_coverage = pattern_data.get('example_coverage_ratio', 0)
+        object_coverage = pattern_data.get('object_coverage_ratio', 0)
+
+        result = {
+            'pattern_type': pattern_type,
+            'confidence': confidence,
+            'instance_count': len(instances),
+            'example_coverage': example_coverage,
+            'object_coverage': object_coverage,
+            'is_universal': example_coverage > 0.9  # 90%以上的示例支持则视为通用规则
+        }
+
+        # 根据模式类型创建描述
+        if pattern_type == 'four_box_pattern':
+            # 分析所有实例中的主要颜色和环绕颜色
+            center_colors = {}
+            surr_colors = {}
+            complete_count = 0
+
+            for instance in instances:
+                # 统计中心颜色
+                center_color = instance.get('center_color')
+                if center_color is not None:
+                    if center_color not in center_colors:
+                        center_colors[center_color] = 0
+                    center_colors[center_color] += 1
+
+                # 统计环绕颜色
+                surr_color = instance.get('surrounding_color')
+                if surr_color is not None:
+                    if surr_color not in surr_colors:
+                        surr_colors[surr_color] = 0
+                    surr_colors[surr_color] += 1
+
+                # 统计完整4Box的数量
+                if instance.get('is_complete', False):
+                    complete_count += 1
+
+            # 找出最常见的颜色
+            main_center_color = max(center_colors.items(), key=lambda x: x[1])[0] if center_colors else None
+            main_surr_color = max(surr_colors.items(), key=lambda x: x[1])[0] if surr_colors else None
+
+            # 记录完整性比例
+            result['complete_ratio'] = complete_count / len(instances) if instances else 0
+            result['center_color'] = main_center_color
+            result['surrounding_color'] = main_surr_color
+
+            # 创建描述
+            pattern_quality = "完全" if result['complete_ratio'] > 0.8 else "部分"
+            universality = "通用" if result['is_universal'] else "部分适用的"
+
+            result['description'] = (
+                f"{universality}4Box模式：中心颜色{main_center_color}的对象被颜色{main_surr_color}"
+                f"的对象{pattern_quality}包围时，添加颜色为{target_color}的新对象"
+            )
+            result['formal_name'] = '4Box模式'
+
+            # 添加可执行规则
+            result['executable_rule'] = {
+                'rule_type': 'four_box_pattern',
+                'action': 'add_objects',
+                'center_color': main_center_color,
+                'surrounding_color': main_surr_color,
+                'target_color': target_color,
+                'min_directions': 2 if pattern_quality == "部分" else 4,
+                'required_completion': 0.7 if pattern_quality == "部分" else 0.9,
+                'priority': 0.8 if universality == "通用" else 0.6
+            }
+
+            # 添加该模式的执行函数引用
+            result['detect_fun'] = 'detect_four_box_pattern'
+            result['execute_function'] = 'apply_four_box_pattern_rule'
+
+        # 这里可以添加其他模式类型的处理...
+
+        return result
+
+
+    def _create_enhanced_pattern_description0(self, pattern_type, pattern_data, target_color):
         """创建增强的模式描述，包括通用性和置信度指标"""
         instances = pattern_data['instances']
         confidence = pattern_data['confidence']
@@ -810,3 +892,76 @@ class PatternAnalysisMixin:
                 surrounding_colors_count[color][direction] += 1
 
         return surrounding_colors_count
+
+
+    def detect_four_box_pattern(self, grid, rule):
+        """
+        在输入网格中检测4Box模式（使用对象级分析）
+
+        Args:
+            grid: 输入网格
+            rule: 执行规则
+
+        Returns:
+            检测到的四字形模式列表
+        """
+        center_color = rule.get('center_color')
+        surrounding_color = rule.get('surrounding_color')
+        min_directions = rule.get('min_directions', 2)
+
+        # 找出所有中心颜色的像素位置
+        center_positions = []
+        height = len(grid)
+        width = len(grid[0]) if height > 0 else 0
+
+        for y in range(height):
+            for x in range(width):
+                if grid[y][x] == center_color:
+                    center_positions.append((x, y))
+
+        if not center_positions:
+            return []
+
+        # 将中心颜色的像素分组成对象
+        center_objects = self._find_connected_objects(center_positions)
+
+        # 使用现有的对象分析函数检查4Box模式
+        fourbox_instances = self._check_objects_for_4box_patterns(grid, center_objects, set(center_positions))
+
+        # 过滤符合规则要求的实例
+        filtered_instances = []
+        for instance in fourbox_instances:
+            # 检查是否符合规则中的颜色和方向要求
+            if (instance['surrounding_color'] == surrounding_color and
+                instance['total_directions'] >= min_directions):
+                filtered_instances.append(instance)
+
+        return filtered_instances
+
+    def apply_four_box_pattern_rule(self, grid, rule):
+        """
+        应用4Box模式规则，在检测到的位置添加目标颜色
+
+        Args:
+            grid: 输入网格
+            rule: 执行规则
+
+        Returns:
+            更新后的网格
+        """
+        # 复制输入网格，避免修改原始数据
+        output_grid = [row[:] for row in grid]
+
+        # 检测4Box模式
+        detected_patterns = self.detect_four_box_pattern(grid, rule)
+
+        # 对每个检测到的模式，添加目标颜色
+        target_color = rule.get('target_color')
+        for pattern in detected_patterns:
+            x, y = pattern['center_position']
+            # 覆盖中心位置的颜色
+            output_grid[y][x] = target_color
+
+            # 如果规则有其他处理（例如，在周围添加更多对象），可以在这里添加
+
+        return output_grid

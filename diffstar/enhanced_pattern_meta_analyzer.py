@@ -177,7 +177,7 @@ class EnhancedPatternMetaAnalyzer(PatternAnalysisMixin):
                         supporting_pairs=list(all_supporting_pairs),
                         patterns=patterns,
                         confidence=max(p.get('confidence', 0) for p in patterns),
-                        description=f"对颜色为{color}的所有对象执行{operation}操作"
+                        description=f"对颜色为{color}的所有对象 被执行{operation}操作"
                     )
 
                     self.global_operation_rules.append(rule)
@@ -203,7 +203,7 @@ class EnhancedPatternMetaAnalyzer(PatternAnalysisMixin):
                         supporting_pairs=list(all_supporting_pairs),
                         patterns=patterns,
                         confidence=max(p.get('confidence', 0) for p in patterns),
-                        description=f"对颜色为{color}的所有对象执行{operation}操作"
+                        description=f"对颜色为{color}的所有对象 被执行{operation}操作"
                     )
 
                     # 如果是添加操作并且规则适用于所有训练样例，分析背后的模式
