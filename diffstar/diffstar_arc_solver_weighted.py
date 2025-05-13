@@ -536,7 +536,8 @@ class WeightedARCSolver:
                 break
 
             # if task_id != '00d62c1b':
-            #     continue
+            if task_id != '009d5c81':
+                continue
 
             task_data = {
                 'task': task,

@@ -165,7 +165,15 @@ class OptimizedRuleApplier:
         output_grid = [row[:] for row in input_grid]
 
         # 1. 首先处理advanced_rules中的规则
-        if "advanced_rules" in common_patterns:
+        has_underlying_pattern = False
+        if 'advanced_rules' in common_patterns and 'global_rules' in common_patterns['advanced_rules']:
+            for rule in common_patterns['advanced_rules']['global_rules']:
+                if 'underlying_pattern' in rule:
+                    has_underlying_pattern = True
+                    break
+
+        if has_underlying_pattern:
+        # if "advanced_rules" in common_patterns:
             advanced_rules = common_patterns["advanced_rules"]
 
             # 寻找带有underlying_pattern的全局规则

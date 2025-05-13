@@ -1360,7 +1360,16 @@ class WeightedARCDiffAnalyzer(ARCDiffAnalyzer):
         # 首先应用基于模式的规则（如4Box模式）
         # 检查是否有全局规则
         pattern_based_output = None
+
+        # 检查是否有包含underlying_pattern的全局规则
+        has_underlying_pattern = False
         if 'advanced_rules' in common_patterns and 'global_rules' in common_patterns['advanced_rules']:
+            for rule in common_patterns['advanced_rules']['global_rules']:
+                if 'underlying_pattern' in rule:
+                    has_underlying_pattern = True
+                    break
+
+        if has_underlying_pattern:
             # 尝试应用模式规则
             pattern_based_output = self.execute_pattern_based_rules(
                 input_grid,
