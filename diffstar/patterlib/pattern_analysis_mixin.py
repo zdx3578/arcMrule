@@ -270,7 +270,7 @@ class PatternAnalysisMixin:
                 'center_color': main_center_color,
                 'surrounding_color': main_surr_color,
                 'target_color': target_color,
-                'min_directions': 2 if pattern_quality == "部分" else 4,
+                'min_directions': 4 if pattern_quality == "部分" else 4,
                 'required_completion': 0.7 if pattern_quality == "部分" else 0.9,
                 'priority': 0.8 if universality == "通用" else 0.6
             }
@@ -847,7 +847,7 @@ class PatternAnalysisMixin:
 
         return boundary_positions
 
-    def _analyze_surrounding_colors(self, boundary_positions, all_added_positions, grid):
+    def _analyze_surrounding_colors(self, boundary_positions, all_added_positions, grid, ignore_grid_boundary=True):
         """
         分析对象边界周围的颜色分布
 
@@ -855,6 +855,7 @@ class PatternAnalysisMixin:
             boundary_positions: 对象边界位置列表，每个元素是(x, y, dx, dy)
             all_added_positions: 所有添加位置的集合
             grid: 输入网格
+            ignore_grid_boundary: 是否忽略网格边界作为包围颜色（True表示边界不算包围）
 
         Returns:
             字典，键为颜色，值为该颜色在不同方向出现的次数
@@ -876,8 +877,15 @@ class PatternAnalysisMixin:
         for x, y, dx, dy in boundary_positions:
             nx, ny = x + dx, y + dy
 
-            # 检查邻居是否在网格内且不是添加位置
-            if 0 <= nx < width and 0 <= ny < height and (nx, ny) not in all_added_positions:
+            # 检查是否是网格边界
+            is_boundary = nx < 0 or ny < 0 or nx >= width or ny >= height
+
+            # 如果是边界且设置了忽略边界，则跳过
+            if is_boundary and ignore_grid_boundary:
+                continue
+
+            # 网格内且不是添加位置的点
+            if not is_boundary and (nx, ny) not in all_added_positions:
                 color = grid[ny][nx]
                 direction = direction_map.get((dx, dy), 'unknown')
 
@@ -896,7 +904,7 @@ class PatternAnalysisMixin:
 
     def detect_four_box_pattern(self, grid, rule):
         """
-        在输入网格中检测4Box模式（使用对象级分析）
+        在输入网格中检测4Box模式，排除背景对象
 
         Args:
             grid: 输入网格
@@ -907,12 +915,15 @@ class PatternAnalysisMixin:
         """
         center_color = rule.get('center_color')
         surrounding_color = rule.get('surrounding_color')
-        min_directions = rule.get('min_directions', 2)
+        min_directions = rule.get('min_directions', 4)
 
         # 找出所有中心颜色的像素位置
         center_positions = []
         height = len(grid)
         width = len(grid[0]) if height > 0 else 0
+
+        # 背景色通常是0
+        background_color = 0
 
         for y in range(height):
             for x in range(width):
@@ -925,8 +936,34 @@ class PatternAnalysisMixin:
         # 将中心颜色的像素分组成对象
         center_objects = self._find_connected_objects(center_positions)
 
-        # 使用现有的对象分析函数检查4Box模式
-        fourbox_instances = self._check_objects_for_4box_patterns(grid, center_objects, set(center_positions))
+        # 过滤掉太大的对象（可能是背景）
+        filtered_objects = []
+        for obj in center_objects:
+            # 如果对象太大（比如超过总网格的50%），可能是背景，跳过
+            if len(obj) > (width * height * 0.5):
+                if hasattr(self, 'debug') and self.debug and hasattr(self, 'debug_print'):
+                    self.debug_print(f"跳过大型背景对象，大小: {len(obj)}像素")
+                continue
+
+            # 如果对象多处接触网格边界，可能是背景对象
+            border_touches = 0
+            for x, y in obj:
+                if x == 0 or y == 0 or x == width-1 or y == height-1:
+                    border_touches += 1
+
+            # 如果接触边界的像素超过对象大小的50%，可能是背景
+            if border_touches > len(obj) * 0.5:
+                if hasattr(self, 'debug') and self.debug and hasattr(self, 'debug_print'):
+                    self.debug_print(f"跳过边界对象，接触边界: {border_touches}像素")
+                continue
+
+            filtered_objects.append(obj)
+
+        # 使用对象级分析函数检查4Box模式，忽略网格边界
+        fourbox_instances = []
+        for obj in filtered_objects:
+            instances = self._check_objects_for_4box_patterns(grid, [obj], set(center_positions))
+            fourbox_instances.extend(instances)
 
         # 过滤符合规则要求的实例
         filtered_instances = []
@@ -938,9 +975,11 @@ class PatternAnalysisMixin:
 
         return filtered_instances
 
+
+
     def apply_four_box_pattern_rule(self, grid, rule):
         """
-        应用4Box模式规则，在检测到的位置添加目标颜色
+        应用4Box模式规则，考虑整个对象的需求
 
         Args:
             grid: 输入网格
@@ -949,19 +988,40 @@ class PatternAnalysisMixin:
         Returns:
             更新后的网格
         """
-        # 确保输入网格是可修改的列表，而不是元组
+        # 确保输入网格是可修改的列表
         output_grid = [list(row) for row in grid]
 
         # 检测4Box模式
         detected_patterns = self.detect_four_box_pattern(grid, rule)
 
-        # 对每个检测到的模式，添加目标颜色
-        target_color = rule.get('target_color')
-        for pattern in detected_patterns:
-            x, y = pattern['center_position']
-            # 覆盖中心位置的颜色
-            output_grid[y][x] = target_color
+        # 没有检测到模式，直接返回原网格
+        if not detected_patterns:
+            return output_grid
 
-            # 如果规则有其他处理（例如，在周围添加更多对象），可以在这里添加
+        # 对每个检测到的模式，根据对象大小确定处理方式
+        target_color = rule.get('target_color')
+
+        for pattern in detected_patterns:
+            # 如果是对象级结果，包含object_positions
+            if 'object_positions' in pattern and pattern['object_positions']:
+                # 对整个对象应用规则
+                for x, y in pattern['object_positions']:
+                    output_grid[y][x] = target_color
+
+                if hasattr(self, 'debug') and self.debug and hasattr(self, 'debug_print'):
+                    obj_size = len(pattern['object_positions'])
+                    self.debug_print(f"应用4Box对象规则：替换{obj_size}个像素的对象为颜色{target_color}")
+            else:
+                # 后备：只修改中心位置
+                x, y = pattern['center_position']
+                output_grid[y][x] = target_color
+
+                if hasattr(self, 'debug') and self.debug and hasattr(self, 'debug_print'):
+                    self.debug_print(f"应用4Box像素规则：将位置({x},{y})改为颜色{target_color}")
 
         return output_grid
+
+
+
+
+

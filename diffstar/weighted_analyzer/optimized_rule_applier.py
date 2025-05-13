@@ -190,7 +190,7 @@ class OptimizedRuleApplier:
                                 'center_color': pattern.get('center_color'),
                                 'surrounding_color': pattern.get('surrounding_color'),
                                 'target_color': rule.get('color'),
-                                'min_directions': 2 if pattern.get('complete_ratio', 0) < 0.8 else 4
+                                'min_directions': 4 if pattern.get('complete_ratio', 0) < 0.8 else 4
                             }
 
                             # 执行模式特定的应用函数

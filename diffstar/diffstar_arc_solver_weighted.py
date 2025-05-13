@@ -535,8 +535,8 @@ class WeightedARCSolver:
             if limit is not None and count >= limit:
                 break
 
-            if task_id != '00d62c1b':
-                continue
+            # if task_id != '00d62c1b':
+            #     continue
 
             task_data = {
                 'task': task,
@@ -546,8 +546,10 @@ class WeightedARCSolver:
             }
 
 
-            if task_id =='00d62c1b':
-                print(f"\n\n\n\n处理任务 {task_id} 的参数组合: {task_data['solution']}")
+            # if task_id =='00d62c1b':
+            #     print(f"\n\n\n\n处理任务 {task_id} 的参数组合: {task_data['solution']}")
+
+
             try:
                 result = self.process_task(task_data)
                 results[task_id] = result

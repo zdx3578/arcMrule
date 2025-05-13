@@ -11,7 +11,7 @@ def detect_four_box_pattern_new2(self, grid, rule):
     """
     center_color = rule.get('center_color')
     surrounding_color = rule.get('surrounding_color')
-    min_directions = rule.get('min_directions', 2)
+    min_directions = rule.get('min_directions', 4)
 
     # 找出所有中心颜色的像素位置
     center_positions = []
