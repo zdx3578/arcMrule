@@ -844,7 +844,7 @@ class WeightedARCDiffAnalyzer(ARCDiffAnalyzer):
                         }
                     })
 
-            elif rule.get('rule_type') == 'conditional_color_change':
+            elif rule.get('rule_type') == 'conditional_rule':
                 step_info["action"] = {
                     "when_removed_shape_change_color": rule['condition'].get('shape_hash'),
                     "color_change": {

@@ -207,13 +207,38 @@ class OptimizedRuleApplier:
                                 self.debug_print(f"应用了{pattern['pattern_type']}模式规则，添加颜色{rule['color']}的对象")
 
         # 2. 如果没有模式规则或模式规则未处理，使用传统方法
-        if output_grid == [row[:] for row in input_grid] and traditional_rule_applier:
-            # 这里保留原有的处理逻辑，作为回退方案
-            output_grid = traditional_rule_applier.apply_transformation_rules(
-                input_grid, common_patterns, input_objects, None, self.debug
-            )
+        # 检查是否有优化执行计划
+        has_optimized_plan = isinstance(common_patterns, dict) and 'optimized_plan' in common_patterns
 
-        return output_grid
+        if has_optimized_plan:
+            return self.apply_optimized_plan(
+                input_grid, common_patterns['optimized_plan'], input_objects, background_color
+            )
+        elif traditional_rule_applier:
+            # 委托给传统规则应用器
+            return traditional_rule_applier.apply_transformation_rules(
+                input_grid, common_patterns, input_objects, transformation_rules
+            )
+        else:
+            if self.debug:
+                self.debug_print("警告：既没有优化计划，也没有传统规则应用器，返回原始网格")
+            return input_grid
+
+
+        # # 3. 处理conditional_rule
+        # conditional_rules = []
+        # for rule in common_patterns['advanced_rules']['conditional_rules']:
+        #     if rule.get('rule_type') == 'conditional_rule':
+        #         conditional_rules.append(rule)
+
+
+        # if output_grid == [row[:] for row in input_grid] and traditional_rule_applier:
+        #     # 这里保留原有的处理逻辑，作为回退方案
+        #     output_grid = traditional_rule_applier.apply_transformation_rules(
+        #         input_grid, common_patterns, input_objects, None, self.debug
+        #     )
+
+        # return output_grid
 
 
     def apply_transformation_rules0(self, input_grid, common_patterns, input_objects,

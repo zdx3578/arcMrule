@@ -624,7 +624,7 @@ class EnhancedPatternMetaAnalyzer(PatternAnalysisMixin):
 
         conditional_matches = [m for m in self.test_matched_rules
                               if 'rule' in m and
-                              m['rule'].get('rule_type') == 'conditional_color_change' and
+                              m['rule'].get('rule_type') == 'conditional_rule' and
                               id(m['rule']) not in covered_conditionals and
                               m['match_score'] > 0.5]
 
