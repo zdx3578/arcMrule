@@ -18,6 +18,8 @@
 //         }
 //     ]
 // }
+
+
 {
     "version": "0.2.0",
     "configurations": [
@@ -25,19 +27,64 @@
             "name": "Run main.py with dataset",
             "type": "debugpy",
             "request": "launch",
-            "program": "/Users/zhangdexiang/github/VSAHDC/arcMrule/diffstar/main.py",
-            // '/home/zdx/github/VSAHDC/arcMrule/pure-manual-rule.py'
-            "args": [
-                "--process-all",
-                "--task-type",
-                "train",
-                "--debug",
-                //     "/home/zdx/github/VSAHDC/ravendataset/RAVEN-10000"
-            ],
+            "program": "/Users/zhangdexiang/github/VSAHDC/arcMrule/popper/run_arc_solver_integration.py",
+            "cwd": "/Users/zhangdexiang/github/VSAHDC/arcMrule/popper/",
+            // // '/home/zdx/github/VSAHDC/arcMrule/pure-manual-rule.py'
+            // "args": [
+            //     "--process-all",
+            //     "--task-type",
+            //     "train",
+            //     "--debug",
+            //     //     "/home/zdx/github/VSAHDC/ravendataset/RAVEN-10000"
+            // ],
             "console": "integratedTerminal"
         }
     ]
 }
+
+// {
+//     "version": "0.2.0",
+//     "configurations": [
+//         {
+//             "name": "Run main.py with dataset",
+//             "type": "debugpy",
+//             "request": "launch",
+//             "program": "/Users/zhangdexiang/github/VSAHDC/arcMrule/diffstar/main.py",
+//             // '/home/zdx/github/VSAHDC/arcMrule/pure-manual-rule.py'
+//             "args": [
+//                 "--process-all",
+//                 "--task-type",
+//                 "train",
+//                 "--debug",
+//                 //     "/home/zdx/github/VSAHDC/ravendataset/RAVEN-10000"
+//             ],
+//             "console": "integratedTerminal"
+//         }
+//     ]
+// }
+
+
+
+// {
+//     "version": "0.2.0",
+//     "configurations": [
+//         {
+//             "name": "Run main.py with dataset",
+//             "type": "debugpy",
+//             "request": "launch",
+//             "program": "/Users/zhangdexiang/github/VSAHDC/arcMrule/diffstar/main.py",
+//             // '/home/zdx/github/VSAHDC/arcMrule/pure-manual-rule.py'
+//             "args": [
+//                 "--process-all",
+//                 "--task-type",
+//                 "train",
+//                 "--debug",
+//                 //     "/home/zdx/github/VSAHDC/ravendataset/RAVEN-10000"
+//             ],
+//             "console": "integratedTerminal"
+//         }
+//     ]
+// }
 // {
 //     "version": "0.2.0",
 //     "configurations": [

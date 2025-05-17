@@ -366,6 +366,7 @@ class WeightedARCSolver:
                 output_grid = example['output']
 
                 # 添加到差异分析器
+                #! when again param loop add obj to one diff_analyzer for  6: 025d127b
                 self.diff_analyzer.add_train_pair(i, input_grid, output_grid, param, background_color)
             for i, example in enumerate(task['test']):
                 print(f"\n\n\n\n处理 task TEST pair 数据对 {i} \n\n")

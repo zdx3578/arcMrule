@@ -35,6 +35,11 @@ class ARCRelationshipLibraries:
         self.objects_by_color = defaultdict(list)  # color -> [(pair_id, io_type, obj_id), ...]
         self.objects_by_size = defaultdict(list)   # size -> [(pair_id, io_type, obj_id), ...]
         self.objects_by_position = defaultdict(list) # (row, col) -> [(pair_id, io_type, obj_id), ...]
+        #!
+        self.objects_by_if_adj_border = defaultdict(list)
+        self.objects_by_if_color_is_bg = defaultdict(list)
+        self.objects_by_if_color_is_bg_if_sizeMax = defaultdict(list)
+
 
         # 操作库
         self.removed_objects = []  # [(pair_id, obj_id, object_info), ...]
@@ -217,7 +222,7 @@ class ARCRelationshipLibraries:
         except AttributeError:
             pass
 
-        # 处理位置
+        # 处理位置#!是否背景对象，是否靠近边界
         try:
             position = (obj_info.top, obj_info.left)
             self.objects_by_position[position].append((pair_id, io_type, obj_id))
