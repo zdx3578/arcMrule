@@ -9,42 +9,44 @@ from arcMrule.diffstar.weighted_analyzer.object_matching import ObjectMatcher
 
 from arcMrule.popper.grid_extension_plugin_integration import GridExtensionPriorKnowledge
 
-class PriorKnowledgePlugin(abc.ABC):
-    """先验知识插件接口"""
+from base_classes import PriorKnowledgePlugin
 
-    @abc.abstractmethod
-    def get_plugin_name(self) -> str:
-        """获取插件名称"""
-        pass
+# class PriorKnowledgePlugin(abc.ABC):
+#     """先验知识插件接口"""
 
-    @abc.abstractmethod
-    def is_applicable(self, task_data: Dict) -> bool:
-        """判断此先验知识是否适用于当前任务"""
-        pass
+#     @abc.abstractmethod
+#     def get_plugin_name(self) -> str:
+#         """获取插件名称"""
+#         pass
 
-    @abc.abstractmethod
-    def generate_facts(self, pair_id: int, input_objects: List, output_objects: List) -> List[str]:
-        """生成特定于任务的Popper事实"""
-        pass
+#     @abc.abstractmethod
+#     def is_applicable(self, task_data: Dict) -> bool:
+#         """判断此先验知识是否适用于当前任务"""
+#         pass
 
-    @abc.abstractmethod
-    def generate_positive_examples(self, pair_id: int) -> List[str]:
-        """生成特定于任务的正例"""
-        pass
+#     @abc.abstractmethod
+#     def generate_facts(self, pair_id: int, input_objects: List, output_objects: List) -> List[str]:
+#         """生成特定于任务的Popper事实"""
+#         pass
 
-    @abc.abstractmethod
-    def generate_negative_examples(self, pair_id: int) -> List[str]:
-        """生成特定于任务的负例"""
-        pass
+#     @abc.abstractmethod
+#     def generate_positive_examples(self, pair_id: int) -> List[str]:
+#         """生成特定于任务的正例"""
+#         pass
 
-    def generate_bias(self) -> str:
-        """生成特定于任务的Popper偏置"""
-        return ""
+#     @abc.abstractmethod
+#     def generate_negative_examples(self, pair_id: int) -> List[str]:
+#         """生成特定于任务的负例"""
+#         pass
 
-    def apply_solution(self, input_grid, learned_rules=None):
-        """应用插件特定的解决方案"""
-        # 默认实现返回输入网格的副本
-        return [row[:] for row in input_grid]
+#     def generate_bias(self) -> str:
+#         """生成特定于任务的Popper偏置"""
+#         return ""
+
+#     def apply_solution(self, input_grid, learned_rules=None):
+#         """应用插件特定的解决方案"""
+#         # 默认实现返回输入网格的副本
+#         return [row[:] for row in input_grid]
 
 
 class ARCSolverModular:
@@ -431,83 +433,83 @@ class ARCSolverModular:
 
         return changes
 
-    def _convert_to_popper_facts(self, pair_id, input_grid, output_grid, input_objects, output_objects):
-        """转换为通用的Popper事实 - 不依赖于特定任务"""
-        facts = []
+    # def _convert_to_popper_facts(self, pair_id, input_grid, output_grid, input_objects, output_objects):
+    #     """转换为通用的Popper事实 - 不依赖于特定任务"""
+    #     facts = []
 
-        # 添加网格尺寸信息
-        height, width = len(input_grid), len(input_grid[0])
-        facts.append(f"grid_size({pair_id}, {width}, {height}).")
+    #     # 添加网格尺寸信息
+    #     height, width = len(input_grid), len(input_grid[0])
+    #     facts.append(f"grid_size({pair_id}, {width}, {height}).")
 
-        # 添加通用对象信息
-        for i, obj in enumerate(input_objects):
-            obj_id = f"in_{pair_id}_{i}"
-            facts.append(f"object({obj_id}).")
-            facts.append(f"input_object({obj_id}).")
-            facts.append(f"color({obj_id}, {obj['color']}).")
+    #     # 添加通用对象信息
+    #     for i, obj in enumerate(input_objects):
+    #         obj_id = f"in_{pair_id}_{i}"
+    #         facts.append(f"object({obj_id}).")
+    #         facts.append(f"input_object({obj_id}).")
+    #         facts.append(f"color({obj_id}, {obj['color']}).")
 
-            if 'type' in obj:
-                facts.append(f"type({obj_id}, {obj['type']}).")
+    #         if 'type' in obj:
+    #             facts.append(f"type({obj_id}, {obj['type']}).")
 
-            # 添加通用位置和尺寸信息
-            if 'x_min' in obj:
-                facts.append(f"x_min({obj_id}, {obj['x_min']}).")
-                facts.append(f"y_min({obj_id}, {obj['y_min']}).")
-                facts.append(f"x_max({obj_id}, {obj['x_max']}).")
-                facts.append(f"y_max({obj_id}, {obj['y_max']}).")
-                facts.append(f"width({obj_id}, {obj['width']}).")
-                facts.append(f"height({obj_id}, {obj['height']}).")
-                facts.append(f"size({obj_id}, {obj['size']}).")
+    #         # 添加通用位置和尺寸信息
+    #         if 'x_min' in obj:
+    #             facts.append(f"x_min({obj_id}, {obj['x_min']}).")
+    #             facts.append(f"y_min({obj_id}, {obj['y_min']}).")
+    #             facts.append(f"x_max({obj_id}, {obj['x_max']}).")
+    #             facts.append(f"y_max({obj_id}, {obj['y_max']}).")
+    #             facts.append(f"width({obj_id}, {obj['width']}).")
+    #             facts.append(f"height({obj_id}, {obj['height']}).")
+    #             facts.append(f"size({obj_id}, {obj['size']}).")
 
-                # 特定形状特征
-                if obj.get('is_rectangle', False):
-                    facts.append(f"is_rectangle({obj_id}).")
-                if obj.get('touches_edge', False):
-                    facts.append(f"touches_edge({obj_id}).")
+    #             # 特定形状特征
+    #             if obj.get('is_rectangle', False):
+    #                 facts.append(f"is_rectangle({obj_id}).")
+    #             if obj.get('touches_edge', False):
+    #                 facts.append(f"touches_edge({obj_id}).")
 
-        for i, obj in enumerate(output_objects):
-            obj_id = f"out_{pair_id}_{i}"
-            facts.append(f"object({obj_id}).")
-            facts.append(f"output_object({obj_id}).")
-            facts.append(f"color({obj_id}, {obj['color']}).")
+    #     for i, obj in enumerate(output_objects):
+    #         obj_id = f"out_{pair_id}_{i}"
+    #         facts.append(f"object({obj_id}).")
+    #         facts.append(f"output_object({obj_id}).")
+    #         facts.append(f"color({obj_id}, {obj['color']}).")
 
-            if 'type' in obj:
-                facts.append(f"type({obj_id}, {obj['type']}).")
+    #         if 'type' in obj:
+    #             facts.append(f"type({obj_id}, {obj['type']}).")
 
-            # 添加位置和尺寸信息
-            if 'x_min' in obj:
-                facts.append(f"x_min({obj_id}, {obj['x_min']}).")
-                facts.append(f"y_min({obj_id}, {obj['y_min']}).")
-                facts.append(f"x_max({obj_id}, {obj['x_max']}).")
-                facts.append(f"y_max({obj_id}, {obj['y_max']}).")
-                facts.append(f"width({obj_id}, {obj['width']}).")
-                facts.append(f"height({obj_id}, {obj['height']}).")
-                facts.append(f"size({obj_id}, {obj['size']}).")
+    #         # 添加位置和尺寸信息
+    #         if 'x_min' in obj:
+    #             facts.append(f"x_min({obj_id}, {obj['x_min']}).")
+    #             facts.append(f"y_min({obj_id}, {obj['y_min']}).")
+    #             facts.append(f"x_max({obj_id}, {obj['x_max']}).")
+    #             facts.append(f"y_max({obj_id}, {obj['y_max']}).")
+    #             facts.append(f"width({obj_id}, {obj['width']}).")
+    #             facts.append(f"height({obj_id}, {obj['height']}).")
+    #             facts.append(f"size({obj_id}, {obj['size']}).")
 
-                # 特定形状特征
-                if obj.get('is_rectangle', False):
-                    facts.append(f"is_rectangle({obj_id}).")
-                if obj.get('touches_edge', False):
-                    facts.append(f"touches_edge({obj_id}).")
+    #             # 特定形状特征
+    #             if obj.get('is_rectangle', False):
+    #                 facts.append(f"is_rectangle({obj_id}).")
+    #             if obj.get('touches_edge', False):
+    #                 facts.append(f"touches_edge({obj_id}).")
 
-        # 对象间关系
-        for i, obj1 in enumerate(input_objects):
-            for j, obj2 in enumerate(input_objects):
-                if i != j:
-                    obj1_id = f"in_{pair_id}_{i}"
-                    obj2_id = f"in_{pair_id}_{j}"
+    #     # 对象间关系
+    #     for i, obj1 in enumerate(input_objects):
+    #         for j, obj2 in enumerate(input_objects):
+    #             if i != j:
+    #                 obj1_id = f"in_{pair_id}_{i}"
+    #                 obj2_id = f"in_{pair_id}_{j}"
 
-                    # 相对位置关系
-                    if obj1.get('x_max', 0) < obj2.get('x_min', 0):
-                        facts.append(f"left_of({obj1_id}, {obj2_id}).")
-                    if obj1.get('y_max', 0) < obj2.get('y_min', 0):
-                        facts.append(f"above({obj1_id}, {obj2_id}).")
+    #                 # 相对位置关系
+    #                 if obj1.get('x_max', 0) < obj2.get('x_min', 0):
+    #                     facts.append(f"left_of({obj1_id}, {obj2_id}).")
+    #                 if obj1.get('y_max', 0) < obj2.get('y_min', 0):
+    #                     facts.append(f"above({obj1_id}, {obj2_id}).")
 
-                    # 相同颜色关系
-                    if obj1.get('color') == obj2.get('color'):
-                        facts.append(f"same_color({obj1_id}, {obj2_id}).")
+    #                 # 相同颜色关系
+    #                 if obj1.get('color') == obj2.get('color'):
+    #                     facts.append(f"same_color({obj1_id}, {obj2_id}).")
 
-        return facts
+    #     return facts
 
     def prepare_popper_data(self):
         """准备Popper训练数据 - 使用插件架构"""
@@ -518,13 +520,13 @@ class ARCSolverModular:
         # 处理每个训练对
         for pair_id, (input_grid, output_grid) in enumerate(self.train_pairs):
             # 分析转换
-            transformation, input_objects, output_objects = self.analyze_transformation(input_grid, output_grid)
+            transformation, input_objects, output_objects = self.analyze_transformation(input_grid, output_grid,pair_id)
             self.oneInOut_mapping_rules[pair_id] = transformation
             self.all_objects[pair_id] = {"input": input_objects, "output": output_objects}
 
             # 生成通用Popper事实
-            pair_facts = self._convert_to_popper_facts(pair_id, input_grid, output_grid,
-                                                    input_objects, output_objects)
+            pair_facts = self._convert_weighted_objects_to_popper_facts(pair_id, input_grid, output_grid,
+                                                    input_objects, output_objects, transformation)
             all_facts.extend(pair_facts)
 
             # 应用所有适用的插件生成特定事实和例子

@@ -1,4 +1,5 @@
-from arc_solver_modular_integration import PriorKnowledgePlugin
+# from arc_solver_modular_integration import PriorKnowledgePlugin
+from base_classes import PriorKnowledgePlugin
 from typing import Dict, List, Any
 
 # class GridExtensionPriorKnowledge(PriorKnowledgePlugin):
@@ -69,7 +70,7 @@ class GridExtensionPriorKnowledge(PriorKnowledgePlugin):
     def _count_color_in_column(self, grid, col, color):
         """计算列中特定颜色的数量"""
         return sum(1 for row in grid if row[col] == color)
-    
+
 
     def get_plugin_name(self) -> str:
         return "grid_extension_knowledge"
@@ -324,3 +325,7 @@ class GridExtensionPriorKnowledge(PriorKnowledgePlugin):
                         output_grid[y][x] = 2  # 绿色
 
         return output_grid
+
+
+
+
