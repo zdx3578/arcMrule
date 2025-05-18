@@ -1,0 +1,3 @@
+task_json: 05a7bcf2.json
+extractors: [pixel, bars]
+run_popper: true

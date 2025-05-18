@@ -1,0 +1,3 @@
+task_json: sample.json
+extractors: [pixel, bars]
+run_popper: true
