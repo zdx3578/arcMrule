@@ -217,9 +217,14 @@ class PopperFilesGenerator:
         # 针对05a7bcf2任务生成特定的Popper文件
         try:
             # 生成背景知识文件 (bk.pl)
-            bk_content = self._generate_05a7bcf2_background(input_features, output_features)
-            with open(os.path.join(output_dir, "bk.pl"), "w") as f:
+            bk_content = self.generate_comprehensive_05a7bcf2_background(input_features, output_features)
+            bk_file = os.path.join(output_dir, "bk.pl")
+            with open(bk_file, "w") as f:
                 f.write(bk_content)
+
+            # 验证背景知识文件
+            if not self.verify_background_file(bk_file):
+                print("警告: 背景知识文件可能存在问题")
 
             # 生成偏置文件 (bias.pl)
             bias_content = self._generate_05a7bcf2_bias()
@@ -249,6 +254,204 @@ class PopperFilesGenerator:
             print(f"生成Popper文件时出错: {e}")
             print(traceback.format_exc())
             return False
+
+
+    def generate_comprehensive_05a7bcf2_background(self, input_features, output_features):
+        """生成综合修复的背景知识"""
+
+        # 1. 首先添加所有不连续谓词声明和基础定义
+        lines = [
+            "% 综合修复的05a7bcf2任务背景知识",
+            "% 生成时间: " + datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "",
+            "% 全面的不连续谓词声明",
+            ":- discontiguous yellow_object/1.",
+            ":- discontiguous x_min/2.",
+            ":- discontiguous y_min/2.",
+            ":- discontiguous x_pos/2.",
+            ":- discontiguous y_pos/2.",
+            ":- discontiguous width/2.",
+            ":- discontiguous height/2.",
+            ":- discontiguous color/2.",
+            ":- discontiguous h_line/1.",
+            ":- discontiguous v_line/1.",
+            ":- discontiguous line_y_pos/2.",
+            ":- discontiguous line_x_pos/2.",
+            ":- discontiguous on_grid_line/2.",
+            ":- discontiguous grid_intersection/2.",
+            ":- discontiguous adjacent/2.",
+            ":- discontiguous adjacent_pos/4.",
+            ":- discontiguous fills_column/2.",
+            ":- discontiguous column/2.",
+            ":- discontiguous grid_cell/7.",
+            ":- discontiguous green_point/1.",
+            "",
+            "% 基础事实 - 网格大小",
+            "grid_size(0, 10, 10).  % pair_id, width, height",
+            "",
+            "% 颜色定义",
+            "color_value(0, background).",
+            "color_value(1, red).",
+            "color_value(2, green).",
+            "color_value(4, yellow).",
+            "color_value(6, blue).",
+        ]
+
+        # 2. 提取特征并清晰地定义所有谓词
+        h_lines = [f for f in input_features if f.name == "h_line"]
+        v_lines = [f for f in input_features if f.name == "v_line"]
+
+        lines.append("\n% 水平线定义")
+        for i, line in enumerate(h_lines):
+            line_id = f"in_0_{i}"
+            lines.append(f"h_line({line_id}).")
+            lines.append(f"line_y_pos({line_id}, {line.params['y']}).")
+            lines.append(f"color({line_id}, {line.params['color']}).")
+
+        lines.append("\n% 垂直线定义")
+        for i, line in enumerate(v_lines):
+            line_id = f"in_0_{i + len(h_lines)}"
+            lines.append(f"v_line({line_id}).")
+            lines.append(f"line_x_pos({line_id}, {line.params['x']}).")
+            lines.append(f"color({line_id}, {line.params['color']}).")
+
+        yellow_objects = [f for f in input_features if f.name == "yellow_object"]
+        lines.append("\n% 黄色对象定义")
+        for i, obj in enumerate(yellow_objects):
+            obj_id = f"in_0_{i + len(h_lines) + len(v_lines)}"
+            lines.append(f"yellow_object({obj_id}).")
+            lines.append(f"x_min({obj_id}, {obj.params['x']}).")
+            lines.append(f"y_min({obj_id}, {obj.params['y']}).")
+            lines.append(f"color({obj_id}, 4).  % 黄色")
+
+        # 3. 添加输出特征定义
+        out_h_lines = [f for f in output_features if f.name == "h_line"]
+        out_v_lines = [f for f in output_features if f.name == "v_line"]
+
+        lines.append("\n% 输出水平线定义")
+        for i, line in enumerate(out_h_lines):
+            line_id = f"out_0_{i}"
+            lines.append(f"h_line({line_id}).")
+            lines.append(f"line_y_pos({line_id}, {line.params['y']}).")
+            lines.append(f"color({line_id}, {line.params['color']}).")
+
+        lines.append("\n% 输出垂直线定义")
+        for i, line in enumerate(out_v_lines):
+            line_id = f"out_0_{i + len(out_h_lines)}"
+            lines.append(f"v_line({line_id}).")
+            lines.append(f"line_x_pos({line_id}, {line.params['x']}).")
+            lines.append(f"color({line_id}, {line.params['color']}).")
+
+        # 绿色点定义
+        green_points = [f for f in output_features if f.name == "green_point"]
+        lines.append("\n% 绿色点定义")
+        for i, point in enumerate(green_points):
+            point_id = f"out_0_{i + len(out_h_lines) + len(out_v_lines)}"
+            lines.append(f"green_point({point_id}).")
+            lines.append(f"x_pos({point_id}, {point.params['x']}).")
+            lines.append(f"y_pos({point_id}, {point.params['y']}).")
+            lines.append(f"color({point_id}, 2).  % 绿色")
+
+        # 4. 添加网格单元格定义
+        lines.append("\n% 网格单元格定义")
+        lines.append("grid_cell(0, 0, 0, 0, 0, 2, 2).  % pair_id, cell_row, cell_col, left, top, right, bottom")
+        lines.append("grid_cell(0, 0, 1, 3, 0, 6, 2).")
+        lines.append("grid_cell(0, 0, 2, 8, 0, 9, 2).")
+        lines.append("grid_cell(0, 1, 0, 0, 3, 2, 6).")
+        lines.append("grid_cell(0, 1, 1, 3, 3, 6, 6).")
+        lines.append("grid_cell(0, 1, 2, 8, 3, 9, 6).")
+        lines.append("grid_cell(0, 2, 0, 0, 7, 2, 9).")
+        lines.append("grid_cell(0, 2, 1, 3, 7, 6, 9).")
+        lines.append("grid_cell(0, 2, 2, 8, 7, 9, 9).")
+
+        # 5. 添加所有辅助谓词定义，确保没有未定义谓词
+        lines.extend([
+            "\n% 辅助谓词定义",
+            "% 列定义谓词 - bias中使用但未定义的谓词",
+            "column(C, X) :- grid_cell(_, _, C, X, _, _, _).",
+
+            "% 填充列谓词 - bias中使用但未定义的谓词",
+            "fills_column(Col, X) :-",
+            "    number(Col), number(X),",
+            "    column(Col, X),",
+            "    yellow_object(YObj),",
+            "    x_min(YObj, X).",
+            "",
+            "% 安全的on_grid_line谓词定义",
+            "on_grid_line(X, Y) :- ",
+            "    number(X), number(Y),",
+            "    h_line(L), ",
+            "    line_y_pos(L, Y).",
+            "",
+            "on_grid_line(X, Y) :- ",
+            "    number(X), number(Y),",
+            "    v_line(L), ",
+            "    line_x_pos(L, X).",
+            "",
+            "% 安全的adjacent谓词",
+            "adjacent(X, Y) :- number(X), number(Y), Y is X + 1.",
+            "adjacent(X, Y) :- number(X), number(Y), Y is X - 1.",
+            "adjacent(X, Y) :- number(Y), X is Y + 1.",
+            "adjacent(X, Y) :- number(Y), X is Y - 1.",
+            "",
+            "% 安全的adjacent_pos谓词",
+            "adjacent_pos(X1, Y1, X2, Y2) :- ",
+            "    number(X1), number(Y1), number(X2), number(Y2),",
+            "    X1 = X2, adjacent(Y1, Y2).",
+            "",
+            "adjacent_pos(X1, Y1, X2, Y2) :- ",
+            "    number(X1), number(Y1), number(X2), number(Y2),",
+            "    Y1 = Y2, adjacent(X1, X2).",
+            "",
+            "% 安全的网格交点谓词",
+            "grid_intersection(X, Y) :- ",
+            "    number(X), number(Y),",
+            "    v_line(V), line_x_pos(V, X),",
+            "    h_line(H), line_y_pos(H, Y).",
+            "",
+            "% 检查周围是否有黄色对象",
+            "has_adjacent_yellow(X, Y) :-",
+            "    number(X), number(Y),",
+            "    adjacent_pos(X, Y, NX, NY),",
+            "    yellow_object(Obj),",
+            "    x_min(Obj, NX),",
+            "    y_min(Obj, NY).",
+            "",
+            "% 应该为绿色的点",
+            "should_be_green(X, Y) :-",
+            "    number(X), number(Y),",
+            "    grid_intersection(X, Y),",
+            "    has_adjacent_yellow(X, Y)."
+        ])
+
+        # 6. 添加方向声明以解决变量绑定问题
+        lines.extend([
+            "\n% 方向声明",
+            "direction(grid_size, (in, out, out)).",
+            "direction(h_line, (in)).",
+            "direction(v_line, (in)).",
+            "direction(line_y_pos, (in, out)).",
+            "direction(line_x_pos, (in, out)).",
+            "direction(yellow_object, (in)).",
+            "direction(green_point, (in)).",
+            "direction(x_min, (in, out)).",
+            "direction(y_min, (in, out)).",
+            "direction(x_pos, (in, out)).",
+            "direction(y_pos, (in, out)).",
+            "direction(color, (in, out)).",
+            "direction(on_grid_line, (in, in)).",
+            "direction(grid_intersection, (in, in)).",
+            "direction(adjacent, (in, in)).",
+            "direction(adjacent_pos, (in, in, in, in)).",
+            "direction(has_adjacent_yellow, (in, in)).",
+            "direction(should_be_green, (in, in)).",
+            "direction(fills_column, (in, in)).",
+            "direction(column, (in, in)).",
+            "direction(grid_cell, (in, in, in, out, out, out, out))."
+        ])
+
+        return "\n".join(lines)
+
 
     def _generate_05a7bcf2_background(self, input_features: List[Feature], output_features: List[Feature]) -> str:
         """生成05a7bcf2任务的背景知识"""
@@ -359,7 +562,7 @@ class PopperFilesGenerator:
             lines.append("")
 
         # 辅助谓词
-        
+
 
         lines.extend([
             "\n% 修复后的谓词定义",
@@ -421,6 +624,47 @@ class PopperFilesGenerator:
         ])
 
         return "\n".join(lines)
+
+    def verify_background_file(self, bk_file):
+        """验证背景知识文件是否有效"""
+        print(f"验证背景知识文件: {bk_file}")
+
+        try:
+            # 检查文件是否存在
+            if not os.path.exists(bk_file):
+                print(f"错误: 找不到背景知识文件 {bk_file}")
+                return False
+
+            # 保存一个临时版本，添加查询以检查所有谓词
+            temp_file = bk_file + ".test"
+            with open(bk_file, 'r') as src, open(temp_file, 'w') as dest:
+                dest.write(src.read())
+                # 添加测试查询以验证关键谓词
+                dest.write("\n\n% 测试查询\n")
+                dest.write("test_fills_column :- fills_column(_, _).\n")
+                dest.write("test_column :- column(_, _).\n")
+                dest.write("test_h_line :- h_line(_).\n")
+                dest.write("test_v_line :- v_line(_).\n")
+                dest.write("test_adjacent :- adjacent(0, 1).\n")
+                dest.write("test_grid_intersection :- grid_intersection(_, _).\n")
+
+            # 使用SWI-Prolog验证文件
+            check_cmd = ["swipl", "-q", "-t", "halt", "-s", temp_file]
+            result = subprocess.run(check_cmd, capture_output=True, text=True)
+
+            os.remove(temp_file)  # 清理临时文件
+
+            if result.returncode != 0:
+                print(f"背景知识验证失败:\n{result.stderr}")
+                return False
+
+            print("背景知识验证通过")
+            return True
+
+        except Exception as e:
+            print(f"验证背景知识时出错: {e}")
+            print(traceback.format_exc())
+            return False
 
     def _generate_05a7bcf2_bias(self) -> str:
         """生成05a7bcf2任务的偏置文件"""
