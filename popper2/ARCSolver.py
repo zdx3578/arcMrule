@@ -590,36 +590,54 @@ class PopperGenerator:
 
         return "\n".join(bias)
 
-    def _generate_positives(self, task_id: str, rules: List[Dict]) -> str:
-        """生成正例"""
-        positives = []
+    def _generate_positives(self):
+        """生成正例文件"""
+        return """% 05a7bcf2任务的目标概念
+pos(extends_to_grid(0)).
+pos(yellow_fills_vertical(0)).
+pos(green_at_intersections(0)).
+"""
 
-        for rule in rules:
-            if rule["type"] == "grid_extension":
-                positives.append(f"extends_to_grid(0).")
-            elif rule["type"] == "vertical_fill":
-                positives.append(f"yellow_fills_vertical(0).")
-            elif rule["type"] == "intersection_coloring":
-                positives.append(f"green_at_intersections(0).")
+    def _generate_negatives(self):
+        """生成负例文件"""
+        return """% 05a7bcf2任务中不应该出现的概念
+neg(rotates_objects(0)).
+neg(mirrors_horizontally(0)).
+neg(removes_all_objects(0)).
+neg(inverts_colors(0)).
+neg(random_color_change(0)).
+"""
 
-        # 确保至少有一个目标谓词
-        if not rules:
-            positives.append(f"transforms_grid(0).")
+    # def _generate_positives(self, task_id: str, rules: List[Dict]) -> str:
+    #     """生成正例"""
+    #     positives = []
 
-        return "\n".join(positives)
+    #     for rule in rules:
+    #         if rule["type"] == "grid_extension":
+    #             positives.append(f"extends_to_grid(0).")
+    #         elif rule["type"] == "vertical_fill":
+    #             positives.append(f"yellow_fills_vertical(0).")
+    #         elif rule["type"] == "intersection_coloring":
+    #             positives.append(f"green_at_intersections(0).")
 
-    def _generate_negatives(self, task_id: str) -> str:
-        """生成负例"""
-        negatives = []
+    #     # 确保至少有一个目标谓词
+    #     if not rules:
+    #         positives.append(f"transforms_grid(0).")
 
-        # 添加一些通用的负例
-        negatives.append(f"rotates_objects(0).")
-        negatives.append(f"mirrors_horizontally(0).")
-        negatives.append(f"removes_all_objects(0).")
-        negatives.append(f"inverts_colors(0).")
-        negatives.append(f"random_color_change(0).")
+    #     return "\n".join(positives)
 
-        return "\n".join(negatives)
+    # def _generate_negatives(self, task_id: str) -> str:
+    #     """生成负例"""
+    #     negatives = []
+
+    #     # 添加一些通用的负例
+    #     negatives.append(f"rotates_objects(0).")
+    #     negatives.append(f"mirrors_horizontally(0).")
+    #     negatives.append(f"removes_all_objects(0).")
+    #     negatives.append(f"inverts_colors(0).")
+    #     negatives.append(f"random_color_change(0).")
+
+    #     return "\n".join(negatives)
 
 # ----- 主求解器 -----
 

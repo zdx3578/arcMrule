@@ -150,6 +150,11 @@ def run_solver(task_path, output_dir="./popper_files"):
 
 if __name__ == "__main__":
     task_path = "05a7bcf2.json"
+
+    # import os
+
+    print("Current working directory:", os.getcwd())
+
     if os.path.exists(task_path):
         run_solver(task_path)
     else:
