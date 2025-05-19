@@ -218,7 +218,7 @@ class PopperFilesGenerator:
         try:
             # 生成背景知识文件 (bk.pl)
             bk_content = self._generate_05a7bcf2_background(input_features, output_features)
-            with open(os.path.join(output_dir, "background.pl"), "w") as f:
+            with open(os.path.join(output_dir, "bk.pl"), "w") as f:
                 f.write(bk_content)
 
             # 生成偏置文件 (bias.pl)
@@ -264,6 +264,20 @@ class PopperFilesGenerator:
             ":- discontiguous removed/2.",
             ":- discontiguous added/2.",
             ":- discontiguous generated_by/3.",
+            ":- discontiguous yellow_object/1.",
+            ":- discontiguous x_min/2.",
+            ":- discontiguous y_min/2.",
+            ":- discontiguous width/2.",
+            ":- discontiguous height/2.",
+            ":- discontiguous color/2.",
+            ":- discontiguous h_line/1.",
+            ":- discontiguous v_line/1.",
+            ":- discontiguous line_y_pos/2.",
+            ":- discontiguous line_x_pos/2.",
+            ":- discontiguous on_grid_line/2.",
+            ":- discontiguous grid_intersection/2.",
+            ":- discontiguous adjacent/2.",
+            ":- discontiguous adjacent_pos/4.",
             "",
             "% 基础事实 - 代表网格大小和元素位置",
             "grid_size(0, 10, 10).  % pair_id, width, height",
@@ -345,60 +359,65 @@ class PopperFilesGenerator:
             lines.append("")
 
         # 辅助谓词
+        
+
         lines.extend([
-            "% 辅助谓词",
-            "adjacent(X, Y) :- X is Y + 1.",
-            "adjacent(X, Y) :- X is Y - 1.",
+            "\n% 修复后的谓词定义",
+            "% 确保h_line和v_line有通用定义",
+            "% h_line(L) :- line_y_pos(L, _).",
+            "% v_line(L) :- line_x_pos(L, _).",
             "",
-            "% 判断两个坐标是否相邻(曼哈顿距离为1)",
-            "adjacent_pos(X1, Y1, X2, Y2) :- X1 = X2, adjacent(Y1, Y2).",
-            "adjacent_pos(X1, Y1, X2, Y2) :- Y1 = Y2, adjacent(X1, X2).",
+            "% 修复on_grid_line以避免单例变量",
+            "on_grid_line(X, Y) :- h_line(L), line_y_pos(L, Y), between(0, 9, X).",
+            "on_grid_line(X, Y) :- v_line(L), line_x_pos(L, X), between(0, 9, Y).",
             "",
-            "% 验证点位于网格线上",
-            "on_grid_line(X, Y) :- h_line(L), line_y_pos(L, Y).",
-            "on_grid_line(X, Y) :- v_line(L), line_x_pos(L, X).",
+            "% 安全的adjacent谓词",
+            "adjacent(X, Y) :- number(X), number(Y), Y is X + 1.",
+            "adjacent(X, Y) :- number(X), number(Y), Y is X - 1.",
+            "adjacent(X, Y) :- number(Y), X is Y + 1.",
+            "adjacent(X, Y) :- number(Y), X is Y - 1.",
             "",
-            "% 判断点是否为网格交点",
-            "grid_intersection(X, Y) :- ",
-            "    h_line(HL), line_y_pos(HL, Y),",
-            "    v_line(VL), line_x_pos(VL, X).",
+            "% 安全的adjacent_pos谓词",
+            "adjacent_pos(X1, Y1, X2, Y2) :- number(X1), number(Y1), X2 = X1, adjacent(Y1, Y2).",
+            "adjacent_pos(X1, Y1, X2, Y2) :- number(X1), number(Y1), Y2 = Y1, adjacent(X1, X2).",
+            "adjacent_pos(X1, Y1, X2, Y2) :- number(X2), number(Y2), X1 = X2, adjacent(Y1, Y2).",
+            "adjacent_pos(X1, Y1, X2, Y2) :- number(X2), number(Y2), Y1 = Y2, adjacent(X1, X2).",
+            "",
+            "% 安全的网格交点谓词",
+            "grid_intersection(X, Y) :- number(X), number(Y), h_line(H), v_line(V), line_y_pos(H, Y), line_x_pos(V, X).",
             "",
             "% 检查周围是否有黄色对象",
             "has_adjacent_yellow(X, Y) :-",
+            "    number(X), number(Y),",
             "    adjacent_pos(X, Y, NX, NY),",
             "    yellow_object(Obj),",
             "    x_min(Obj, NX),",
             "    y_min(Obj, NY).",
             "",
-            "% 颜色转换规则",
+            "% 应该为绿色的点",
             "should_be_green(X, Y) :-",
+            "    number(X), number(Y),",
             "    grid_intersection(X, Y),",
-            "    has_adjacent_yellow(X, Y).",
-            "",
-            "% 网格单元格定义",
-            "grid_cell(0, 0, 0, 0, 0, 2, 2).  % pair_id, cell_row, cell_col, left, top, right, bottom",
-            "grid_cell(0, 0, 1, 3, 0, 6, 2).",
-            "grid_cell(0, 0, 2, 8, 0, 9, 2).",
-            "grid_cell(0, 1, 0, 0, 3, 2, 6).",
-            "grid_cell(0, 1, 1, 3, 3, 6, 6).",
-            "grid_cell(0, 1, 2, 8, 3, 9, 6).",
-            "grid_cell(0, 2, 0, 0, 7, 2, 9).",
-            "grid_cell(0, 2, 1, 3, 7, 6, 9).",
-            "grid_cell(0, 2, 2, 8, 7, 9, 9).",
-            "",
-            "% 垂直列定义",
-            "column(C, X) :- grid_cell(_, _, C, X, _, _, _).",
-            "",
-            "% 列填充规则",
-            "fills_column(Col, X) :-",
-            "    column(Col, X),",
-            "    yellow_object(YObj),",
-            "    x_min(YObj, X).",
-            "",
-            "% 特征谓词",
-            "forms_grid(0).",
-            "yellow_fills_vertical(0).",
-            "has_green_intersections(0).",
+            "    has_adjacent_yellow(X, Y)."
+        ])
+
+
+        lines.extend([
+            "\n% 方向声明",
+            "direction(grid_size, (in, out, out)).",
+            "direction(h_line, (in)).",
+            "direction(v_line, (in)).",
+            "direction(line_y_pos, (in, out)).",
+            "direction(line_x_pos, (in, out)).",
+            "direction(yellow_object, (in)).",
+            "direction(x_min, (in, out)).",
+            "direction(y_min, (in, out)).",
+            "direction(color, (in, out)).",
+            "direction(on_grid_line, (in, in)).",
+            "direction(grid_intersection, (in, in)).",
+            "direction(adjacent, (in, in)).",
+            "direction(adjacent_pos, (in, in, in, in)).",
+            "direction(has_adjacent_yellow, (in, in))."
         ])
 
         return "\n".join(lines)
@@ -593,7 +612,7 @@ class PopperRuleLearner:
             if self.debug:
                 print("尝试使用Popper学习规则...")
 
-            from popper.util import Settings, print_prog_score
+            from popper.util import Settings#, print_prog_score
             from popper.loop import learn_solution
 
             kbpath = os.path.join(output_dir, "popper_input")
@@ -609,7 +628,7 @@ class PopperRuleLearner:
             if prog:
                 if self.debug:
                     print("\n学习到的规则:")
-                    print_prog_score(prog, score)
+                    Settings.print_prog_score(prog, score)
 
                 # 保存规则
                 with open(os.path.join(output_dir, "learned_rules.pl"), 'w') as f:
