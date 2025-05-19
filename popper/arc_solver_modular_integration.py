@@ -3,6 +3,8 @@ from typing import Dict, List, Tuple, Any
 import numpy as np
 import json
 import os
+import traceback
+from datetime import datetime
 
 from arcMrule.diffstar.weighted_analyzer.analyzer_core import WeightedARCDiffAnalyzer
 from arcMrule.diffstar.weighted_analyzer.object_matching import ObjectMatcher
@@ -780,30 +782,30 @@ class ARCSolverModular:
     def generate_popper_bias(self):
         """生成Popper偏置文件 - 结合通用偏置和插件偏置"""
         bias = """
-        # 基本谓词
-        body(grid_size/3).
-        body(object/1).
-        body(input_object/1).
-        body(output_object/1).
-        body(color/2).
-        body(type/2).
-        body(x_min/2).
-        body(x_max/2).
-        body(y_min/2).
-        body(y_max/2).
-        body(width/2).
-        body(height/2).
-        body(size/2).
-        body(is_rectangle/1).
-        body(touches_edge/1).
-        body(left_of/2).
-        body(above/2).
-        body(same_color/2).
+% % # 基本谓词
+body(grid_size/3).
+body(object/1).
+body(input_object/1).
+body(output_object/1).
+body(color/2).
+body(type/2).
+body(x_min/2).
+body(x_max/2).
+body(y_min/2).
+body(y_max/2).
+body(width/2).
+body(height/2).
+body(size/2).
+body(is_rectangle/1).
+body(touches_edge/1).
+body(left_of/2).
+body(above/2).
+body(same_color/2).
 
-        # 基本约束
-        max_vars(6).
-        max_body(10).
-        """
+% % # 基本约束
+max_vars(6).
+max_body(10).
+"""
 
         # 添加插件提供的特定偏置
         for plugin in self.applicable_plugins:
@@ -841,34 +843,60 @@ class ARCSolverModular:
             print(f"  - 正例: {len(positive)} 条")
             print(f"  - 负例: {len(negative)} 条")
 
+
+
     def learn_rules_with_popper(self, output_dir="."):
         """使用Popper学习规则"""
-        self.save_popper_files(output_dir)
-
-        # 调用Popper (实际代码根据Popper API调整)
+        # self.save_popper_files(output_dir)
         try:
             from popper.util import Settings
             from popper.loop import learn_solution
 
+            # 记录开始时间
+            start_time = datetime.now()
+            print(f"开始学习规则: {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
+
             settings = Settings(
                 bias_file=os.path.join(output_dir, "bias.pl"),
-                examples_file=os.path.join(output_dir, "positive.pl"),
-                neg_examples_file=os.path.join(output_dir, "negative.pl"),
-                bk_file=os.path.join(output_dir, "background.pl")
+                pos_file=os.path.join(output_dir, "positive.pl"),
+                neg_file=os.path.join(output_dir, "negative.pl"),
+                bk_file=os.path.join(output_dir, "background.pl"),
+                timeout=60
             )
 
+            print("正在运行Popper学习器...")
             learned_rules = learn_solution(settings)
-            if learned_rules and self.debug:
-                print("Popper学习到的规则:")
-                for rule in learned_rules:
-                    print(rule)
 
-            return learned_rules
+            if learned_rules:
+                print("成功学习到规则:")
+                for rule in learned_rules:
+                    print(f"  {rule}")
+
+                # 保存学习到的规则
+                with open(os.path.join(output_dir, "learned_rules.pl"), 'w') as f:
+                    for rule in learned_rules:
+                        f.write(f"{rule}\n")
+
+                return learned_rules
+            else:
+                print("Popper未能找到规则")
+                return []
 
         except ImportError:
-            if self.debug:
-                print("警告: 未找到Popper库，无法学习规则")
-                print("请安装Popper: pip install popper")
+            print("未能导入Popper。请确保已安装: pip install popper-ilp")
+            print(f"详细错误信息:\n{traceback.format_exc()}")
+            return []
+        except Exception as e:
+            print(f"学习规则时出错: {e}")
+            print(f"详细堆栈跟踪:\n{traceback.format_exc()}")
+
+            # 将详细错误信息写入日志文件
+            with open(os.path.join(output_dir, "error_log.txt"), 'w') as f:
+                f.write(f"错误时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                f.write(f"错误类型: {type(e).__name__}\n")
+                f.write(f"错误信息: {str(e)}\n")
+                f.write(f"堆栈跟踪:\n{traceback.format_exc()}")
+
             return []
 
     def apply_learned_rules(self, input_grid, learned_rules=None):

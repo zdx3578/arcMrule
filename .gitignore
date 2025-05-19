@@ -9,9 +9,11 @@ diffaweight/
 .DS_Store
 **/.DS_Store
 
+popper/debug_output/
+popper/popper_files/
 
-
-
+diffstar/.vscode/
+diffstar/tmp/
 
 
 

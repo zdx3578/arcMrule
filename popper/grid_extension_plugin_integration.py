@@ -201,23 +201,23 @@ class GridExtensionPriorKnowledge(PriorKnowledgePlugin):
     def generate_bias(self) -> str:
         """生成网格扩展任务的Popper偏置"""
         return """
-        # 目标关系
-        head(extends_to_grid/1).
-        head(yellow_fills_vertical/1).
-        head(green_at_intersections/1).
+# 目标关系
+head(extends_to_grid/1).
+head(yellow_fills_vertical/1).
+head(green_at_intersections/1).
 
-        # 特定于网格任务的谓词
-        body(h_line/1).
-        body(v_line/1).
-        body(yellow_object/1).
-        body(line_y_pos/2).
-        body(line_x_pos/2).
-        body(line_above/3).
-        body(line_below/3).
-        body(forms_grid/1).
-        body(grid_intersection/5).
-        body(has_green_intersections/1).
-        """
+# 特定于网格任务的谓词
+body(h_line/1).
+body(v_line/1).
+body(yellow_object/1).
+body(line_y_pos/2).
+body(line_x_pos/2).
+body(line_above/3).
+body(line_below/3).
+body(forms_grid/1).
+body(grid_intersection/5).
+body(has_green_intersections/1).
+"""
 
     def _is_h_line(self, obj):
         """检查对象是否是水平线"""

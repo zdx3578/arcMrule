@@ -1,6 +1,7 @@
 import os
 import json
 import sys
+import traceback
 
 possible_pypaths = [
     '/kaggle/input/3-28arcdsl'
@@ -92,7 +93,7 @@ def run_solver(task_path, output_dir="./popper_files"):
 
     # 保存Popper文件
     solver.save_popper_files(output_dir)
-    print(f"Popper文件已保存到 {output_dir} 目录")
+    print(f"Popper文件--将保存到 {output_dir} 目录")
 
     # 尝试学习规则
     try:
@@ -106,6 +107,7 @@ def run_solver(task_path, output_dir="./popper_files"):
                 f.write(f"{rule}\n")
     except Exception as e:
         print(f"学习规则时出错: {e}")
+        print(traceback.format_exc())
         learned_rules = []
 
     # 应用规则到测试用例
