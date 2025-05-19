@@ -5,6 +5,7 @@ import json
 import os
 import traceback
 from datetime import datetime
+import shutil
 
 from arcMrule.diffstar.weighted_analyzer.analyzer_core import WeightedARCDiffAnalyzer
 from arcMrule.diffstar.weighted_analyzer.object_matching import ObjectMatcher
@@ -779,7 +780,50 @@ class ARCSolverModular:
 
         return all_facts, positive_examples, negative_examples
 
-    def generate_popper_bias(self):
+
+    def generate_popper_bias(self) -> str:
+        """生成偏置文件"""
+        bias = []
+
+        # 目标谓词
+        bias.append("% 定义目标关系")
+        # for rule in rules:
+        #     if rule["type"] == "grid_extension":
+        bias.append("head_pred(extends_to_grid,1).")
+        #     elif rule["type"] == "vertical_fill":
+        bias.append("head_pred(yellow_fills_vertical,1).")
+        #     elif rule["type"] == "intersection_coloring":
+        bias.append("head_pred(green_at_intersections,1).")
+
+        # 确保至少有一个目标谓词
+        # if not rules:
+        #     bias.append("head_pred(transforms_grid,1).")
+
+        # 背景谓词
+        bias.append("\n% 背景知识谓词")
+        bias.append("body_pred(grid_size,3).")
+        bias.append("body_pred(color_value,2).")
+        bias.append("body_pred(h_line,1).")
+        bias.append("body_pred(v_line,1).")
+        bias.append("body_pred(line_y_pos,2).")
+        bias.append("body_pred(line_x_pos,2).")
+        bias.append("body_pred(yellow_object,1).")
+        bias.append("body_pred(x_min,2).")
+        bias.append("body_pred(y_min,2).")
+        bias.append("body_pred(color,2).")
+        bias.append("body_pred(on_grid_line,2).")
+        bias.append("body_pred(grid_intersection,2).")
+        bias.append("body_pred(has_adjacent_yellow,2).")
+
+        # 搜索约束
+        bias.append("\n% 搜索约束")
+        bias.append("max_vars(6).")
+        bias.append("max_body(8).")
+        bias.append("max_clauses(4).")
+
+        return "\n".join(bias)
+
+    def generate_popper_bias000(self):
         """生成Popper偏置文件 - 结合通用偏置和插件偏置"""
         bias = """
 % % # 基本谓词
@@ -847,6 +891,86 @@ max_body(10).
 
     def learn_rules_with_popper(self, output_dir="."):
         """使用Popper学习规则"""
+        try:
+            from popper.util import Settings #, print_prog_score
+            from popper.loop import learn_solution
+
+            # Popper现在期望具有特定命名的文件
+            # 检查并确保文件名正确
+            expected_files = {
+                "bias.pl": "bias.pl",
+                "positive.pl": "exs.pl",  # Popper现在期望examples在exs.pl
+                "background.pl": "bk.pl"   # Popper现在期望背景知识在bk.pl
+            }
+
+            # 创建一个临时目录以符合Popper的期望
+            tmp_popper_dir = os.path.join(output_dir, "popper_input")
+            os.makedirs(tmp_popper_dir, exist_ok=True)
+
+            # 复制并重命名文件
+            for src_name, dest_name in expected_files.items():
+                src_path = os.path.join(output_dir, src_name)
+                dest_path = os.path.join(tmp_popper_dir, dest_name)
+
+                # 确保源文件存在
+                if os.path.exists(src_path):
+                    shutil.copy(src_path, dest_path)
+                    print(f"已复制 {src_path} 到 {dest_path}")
+                else:
+                    print(f"警告: 找不到源文件 {src_path}")
+
+            # 如果存在negative.pl，将其内容合并到exs.pl
+            neg_file = os.path.join(output_dir, "negative.pl")
+            if os.path.exists(neg_file):
+                with open(neg_file, 'r') as neg_f:
+                    neg_content = neg_f.read()
+
+                with open(os.path.join(tmp_popper_dir, "exs.pl"), 'a') as exs_f:
+                    exs_f.write("\n\n% Negative examples\n")
+                    exs_f.write(neg_content)
+                    print("已将负例合并到exs.pl")
+
+            print(f"开始Popper学习，使用目录: {tmp_popper_dir}")
+
+            # 使用新的Popper API
+            settings = Settings(kbpath=tmp_popper_dir)
+            prog, score, stats = learn_solution(settings)
+
+            if prog != None:
+                print("成功学习到规则:")
+                Settings.print_prog_score(prog, score)
+
+                # 将规则保存为文件
+                with open(os.path.join(output_dir, "learned_rules.pl"), 'w') as f:
+                    for rule in prog:
+                        f.write(f"{rule}\n")
+
+                return prog
+            else:
+                print("Popper未能找到有效规则")
+                return []
+
+        except ImportError:
+            print("未能导入Popper。请确保已安装: pip install git+https://github.com/logic-and-learning-lab/Popper@main")
+            print(f"详细错误信息:\n{traceback.format_exc()}")
+            return []
+        except Exception as e:
+            print(f"学习规则时出错: {e}")
+            print(f"详细堆栈跟踪:\n{traceback.format_exc()}")
+
+            # 将错误信息写入日志文件
+            with open(os.path.join(output_dir, "error_log.txt"), 'w') as f:
+                f.write(f"错误时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                f.write(f"错误类型: {type(e).__name__}\n")
+                f.write(f"错误信息: {str(e)}\n")
+                f.write(f"堆栈跟踪:\n{traceback.format_exc()}")
+
+            return []
+
+
+
+    def learn_rules_with_popper00(self, output_dir="."):
+        """使用Popper学习规则"""
         # self.save_popper_files(output_dir)
         try:
             from popper.util import Settings
@@ -855,14 +979,15 @@ max_body(10).
             # 记录开始时间
             start_time = datetime.now()
             print(f"开始学习规则: {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
+            settings = Settings(kbpath=output_dir)
 
-            settings = Settings(
-                bias_file=os.path.join(output_dir, "bias.pl"),
-                pos_file=os.path.join(output_dir, "positive.pl"),
-                neg_file=os.path.join(output_dir, "negative.pl"),
-                bk_file=os.path.join(output_dir, "background.pl"),
-                timeout=60
-            )
+            # settings = Settings(
+            #     bias_file=os.path.join(output_dir, "bias.pl"),
+            #     pos_file=os.path.join(output_dir, "positive.pl"),
+            #     neg_file=os.path.join(output_dir, "negative.pl"),
+            #     bk_file=os.path.join(output_dir, "background.pl"),
+            #     timeout=60
+            # )
 
             print("正在运行Popper学习器...")
             learned_rules = learn_solution(settings)
