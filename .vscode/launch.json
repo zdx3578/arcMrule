@@ -1,3 +1,21 @@
+// {
+//     "version": "0.2.0",
+//     "configurations": [
+//         {
+//             "name": "Run main.py with dataset",
+//             "type": "debugpy",
+//             "request": "launch",
+//             "program": "/Users/zhangdexiang/github/VSAHDC/arcMrule/popper3GeneraladdTask05/main.py",
+//             "cwd": "/Users/zhangdexiang/github/VSAHDC/arcMrule/popper/",
+//             // // '/home/zdx/github/VSAHDC/arcMrule/pure-manual-rule.py'
+//             "args": [
+//                 "../popper/05a7bcf2.json ",
+//             ],
+//             "console": "integratedTerminal"
+//         }
+//     ]
+// }
+
 {
     "version": "0.2.0",
     "configurations": [
@@ -6,15 +24,18 @@
             "type": "debugpy",
             "request": "launch",
             "program": "/Users/zhangdexiang/github/VSAHDC/arcMrule/popper3GeneraladdTask05/main.py",
-            "cwd": "/Users/zhangdexiang/github/VSAHDC/arcMrule/popper/",
+            "justMyCode": false,
+            "cwd": "/Users/zhangdexiang/github/VSAHDC/arcMrule/popper3GeneraladdTask05/",
             // // '/home/zdx/github/VSAHDC/arcMrule/pure-manual-rule.py'
             "args": [
-                "../popper/05a7bcf2.json ",
+                "/Users/zhangdexiang/github/ARC-AGI-2/data/training/05a7bcf2.json",
+                "--debug",
             ],
             "console": "integratedTerminal"
         }
     ]
 }
+
 // {
 //     "version": "0.2.0",
 //     "configurations": [

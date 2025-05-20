@@ -1091,9 +1091,9 @@ body_pred(adjacent,2).
 body_pred(adjacent_pos,4).
 
 % 搜索约束
-max_vars(6).
-max_body(8).
-max_clauses(4).
+max_vars(8).
+max_body(10).
+max_clauses(10).
 """
 
     def _generate_05a7bcf2_positives(self) -> str:
@@ -1319,11 +1319,13 @@ green_at_intersections(A) :-
 
             settings = Settings(kbpath=kbpath)
             prog, score, stats = learn_solution(settings)
+            # if prog != None:
+                # Settings.print_prog_score(prog, score)
 
             if prog:
-                if self.debug:
-                    print("\n学习到的规则:")
-                    Settings.print_prog_score(prog, score)
+                # if self.debug:
+                #     print("\n学习到的规则:")
+                #     Settings.print_prog_score(prog, score)
 
                 # 保存规则
                 with open(os.path.join(output_dir, "learned_rules.pl"), 'w') as f:
