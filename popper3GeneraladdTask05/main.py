@@ -1154,7 +1154,7 @@ body_pred(adjacent,2).
 body_pred(adjacent_pos,4).
 
 % 搜索约束
-max_vars(8).
+max_vars(6).
 max_body(6).
 max_clauses(4).
 timeout(30).  % 添加30秒超时
@@ -1430,7 +1430,7 @@ green_at_intersections(A) :-
             result = pool.apply_async(_run_popper2, (kbpath, 30))
 
             # 等待结果，最多60秒
-            timeout = 60
+            timeout = 360
             start_time = time.time()
             while not result.ready() and time.time() - start_time < timeout:
                 time.sleep(0.5)
