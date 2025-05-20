@@ -1336,6 +1336,231 @@ green_at_intersections(A) :-
                 else:
                     if self.debug:
                         print("学习到的规则不完整，将使用预定义规则")
+            else:
+                if self.debug:
+                    print("Popper未能找到规则，将使用预定义规则")
 
-                    with open(predefined_rules_path, 'r') as f:
-                        predefined_rules = [line.strip() for line in f if line
+        except Exception as e:
+            print(f"学习规则时出错: {e}")
+            print(traceback.format_exc())
+
+        # 使用预定义规则
+        if self.debug:
+            print("使用预定义规则...")
+
+        with open(predefined_rules_path, 'r') as f:
+            predefined_rules = [line.strip() for line in f
+                               if line.strip() and not line.strip().startswith('%')]
+
+        return predefined_rules
+
+    def run_popper_command_line(self, output_dir: str) -> List[str]:
+        """通过命令行运行Popper"""
+        try:
+            cmd = ["popper", output_dir]
+            if self.debug:
+                print(f"运行命令: {' '.join(cmd)}")
+
+            result = subprocess.run(cmd, capture_output=True, text=True)
+
+            if result.returncode == 0:
+                # 解析Popper输出找到规则
+                learned_rules = []
+                in_solution = False
+
+                for line in result.stdout.split('\n'):
+                    if '**********' in line and 'SOLUTION' in line:
+                        in_solution = True
+                        continue
+                    elif '**********' in line and in_solution:
+                        in_solution = False
+                        continue
+
+                    if in_solution and line.strip() and not line.startswith(('Precision', 'Recall')):
+                        learned_rules.append(line.strip())
+
+                if self.debug:
+                    print(f"找到 {len(learned_rules)} 条规则")
+
+                return learned_rules
+            else:
+                if self.debug:
+                    print("Popper运行失败:")
+                    print(result.stderr)
+
+                # 使用预定义规则
+                return self.create_predefined_rules(output_dir)
+        except Exception as e:
+            print(f"运行Popper失败: {str(e)}")
+            print(traceback.format_exc())
+            return []
+
+# ========================== 主求解器类 ==========================
+
+class EnhancedARCSolver:
+    """结合专用优化、对象抽象和通用架构的增强型ARC求解器"""
+
+    def __init__(self, debug=True, use_object_model=True):
+        self.debug = debug
+        self.working_dir = "arc_solver_output"
+        os.makedirs(self.working_dir, exist_ok=True)
+        self.use_object_model = use_object_model
+
+        # 组件初始化
+        self.extractor = TaskSpecificExtractor()
+        self.rule_generator = PopperFilesGenerator(debug=debug)
+        self.rule_learner = PopperRuleLearner(debug=debug)
+
+        # 根据配置选择执行器类型
+        executor_type = RuleExecutorType.OBJECT_BASED if use_object_model else RuleExecutorType.PIXEL_BASED
+        self.rule_executor = RuleExecutor(debug=debug, executor_type=executor_type)
+
+    def solve_task(self, task_path: str) -> Tuple[bool, float]:
+        """解决ARC任务并返回准确率"""
+        # 加载任务
+        task = ARCTask.from_file(task_path)
+
+        task_dir = os.path.join(self.working_dir, task.task_id)
+        os.makedirs(task_dir, exist_ok=True)
+
+        if self.debug:
+            print(f"解决任务: {task.task_id}")
+            print(f"使用{'对象模型' if self.use_object_model else '像素级操作'}")
+
+        # 使用训练数据学习规则
+        learned_rules = self._learn_from_training_data(task, task_dir)
+
+        # 应用规则到测试数据并评估
+        return self._evaluate_on_test_data(task, learned_rules)
+
+    def _learn_from_training_data(self, task: ARCTask, task_dir: str) -> List[str]:
+        """从训练数据学习规则"""
+        # 选择第一个训练示例进行分析
+        input_grid, output_grid = task.train[0]
+
+        # 提取特征
+        input_features = self.extractor.extract_grid_features(input_grid)
+        output_features = self.extractor.extract_grid_features(output_grid)
+
+        # 为Popper生成文件
+        popper_dir = os.path.join(task_dir, "popper_files")
+        os.makedirs(popper_dir, exist_ok=True)
+
+        self.rule_generator.generate_files(
+            task.task_id, input_features, output_features, popper_dir
+        )
+
+        # 学习规则
+        learned_rules = self.rule_learner.learn_rules(popper_dir)
+
+        # 如果使用API学习失败，尝试命令行方式
+        if not learned_rules:
+            if self.debug:
+                print("API学习失败，尝试命令行方式...")
+            learned_rules = self.rule_learner.run_popper_command_line(popper_dir)
+
+        return learned_rules
+
+    def _evaluate_on_test_data(self, task: ARCTask, learned_rules: List[str]) -> Tuple[bool, float]:
+        """评估学习到的规则在测试数据上的表现"""
+        correct = 0
+        total = len(task.test)
+
+        # 记录结果
+        results = []
+
+        for i, (test_input, expected_output) in enumerate(task.test):
+            if self.debug:
+                print(f"处理测试用例 {i+1}/{total}...")
+
+            # 提取特征
+            features = self.extractor.extract_grid_features(test_input) if not self.use_object_model else None
+
+            # 应用规则
+            predicted_output = self.rule_executor.apply_rules_to_grid(
+                task.task_id, test_input, features, learned_rules
+            )
+
+            # 转换为ARCGrid对象
+            predicted_grid = ARCGrid(predicted_output)
+
+            # 比较预测和期望
+            is_correct = (predicted_grid == expected_output)
+
+            if is_correct:
+                correct += 1
+                result_str = "✓ 正确"
+            else:
+                result_str = "✗ 错误"
+
+            results.append((i, is_correct, result_str))
+
+            if self.debug:
+                print(f"测试用例 {i+1}: {result_str}")
+
+        # 计算准确率
+        accuracy = correct / total if total > 0 else 0
+
+        if self.debug:
+            print(f"总体准确率: {accuracy:.2f} ({correct}/{total})")
+            for i, is_correct, result in results:
+                print(f"  测试用例 {i+1}: {result}")
+
+        # 返回是否完全正确和准确率
+        return (accuracy == 1.0, accuracy)
+
+    def solve_05a7bcf2_task(self, task_data: Dict) -> List[np.ndarray]:
+        """使用专用方法解决05a7bcf2任务"""
+        solutions = []
+
+        task = ARCTask(task_data)
+        task.set_task_id("05a7bcf2")
+
+        # 应用规则到每个测试用例
+        for i, (test_input, _) in enumerate(task.test):
+            if self.use_object_model:
+                solution = self.rule_executor.apply_rules_to_grid("05a7bcf2", test_input)
+            else:
+                features = self.extractor.extract_grid_features(test_input)
+                solution = self.rule_executor.apply_rules_to_grid("05a7bcf2", test_input, features)
+
+            solutions.append(solution)
+
+            if self.debug:
+                print(f"已解决测试用例 {i+1}")
+
+        return solutions
+
+# ========================== 命令行接口 ==========================
+
+def main():
+    """主函数"""
+    import argparse
+
+    parser = argparse.ArgumentParser(description="增强型ARC求解器")
+    parser.add_argument("task_path", help="ARC任务文件路径")
+    parser.add_argument("--debug", action="store_true", help="启用调试输出")
+    parser.add_argument("--no-popper", action="store_true", help="跳过Popper规则学习")
+    parser.add_argument("--pixel-model", action="store_true",
+                        help="使用像素级操作而非对象模型")
+    args = parser.parse_args()
+
+    # 创建求解器
+    solver = EnhancedARCSolver(debug=args.debug, use_object_model=not args.pixel_model)
+
+    # 解决任务
+    success, accuracy = solver.solve_task(args.task_path)
+
+    # 输出结果
+    print("=" * 50)
+    print("任务解决结果:")
+    print(f"  文件: {args.task_path}")
+    print(f"  模型: {'像素级操作' if args.pixel_model else '对象抽象'}")
+    print(f"  正确率: {accuracy:.2f}")
+    print(f"  结果: {'成功' if success else '失败'}")
+    print("=" * 50)
+
+    return 0 if success else 1
+
+if __name__ == "__main__":
+    main()
