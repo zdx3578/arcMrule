@@ -971,10 +971,12 @@ class PopperFilesGenerator:
             "    Y1 = Y2, adjacent(X1, X2).",
             "",
             "% 安全的网格交点谓词",
-            "grid_intersection(X, Y) :- ",
-            "    number(X), number(Y),",
-            "    v_line(V), line_x_pos(V, X),",
-            "    h_line(H), line_y_pos(H, Y).",
+            "grid_intersection(X, Y) :-"
+            "    number(X), number(Y),"
+            "    X >= 0, Y >= 0, X < 10, Y < 10,  % 添加边界检查"
+            "    v_line(V), line_x_pos(V, X),"
+            "    h_line(H), line_y_pos(H, Y),"
+            "    !.  % 添加剪枝，防止过度递归"
             "",
             "% 检查周围是否有黄色对象",
             "has_adjacent_yellow(X, Y) :-",
@@ -1091,9 +1093,10 @@ body_pred(adjacent,2).
 body_pred(adjacent_pos,4).
 
 % 搜索约束
-max_vars(8).
-max_body(10).
-max_clauses(10).
+max_vars(4).
+max_body(5).
+max_clauses(3).
+timeout(30).  % 添加30秒超时
 """
 
     def _generate_05a7bcf2_positives(self) -> str:
@@ -1297,6 +1300,89 @@ green_at_intersections(A) :-
         return rules_file
 
     def learn_rules(self, output_dir: str) -> List[str]:
+        """使用Popper学习规则或使用预定义规则"""
+
+        # 创建预定义规则文件
+        predefined_rules_path = self.create_predefined_rules(output_dir)
+
+        # 尝试使用线程超时机制
+        import threading
+        timeout_seconds = 60  # 设置60秒超时
+        result = [None]
+        is_timeout = [False]
+
+        def popper_thread():
+            try:
+                if self.debug:
+                    print("尝试使用Popper学习规则...")
+
+                from popper.util import Settings
+                from popper.loop import learn_solution
+
+                kbpath = os.path.join(output_dir, "popper_input")
+                if not os.path.exists(kbpath):
+                    kbpath = output_dir
+
+                if self.debug:
+                    print(f"使用Popper目录: {kbpath}")
+
+                settings = Settings(kbpath=kbpath)
+                prog, score, stats = learn_solution(settings)
+
+                if not is_timeout[0]:  # 只有未超时才处理结果
+                    result[0] = prog
+
+            except Exception as e:
+                if self.debug and not is_timeout[0]:
+                    print(f"Popper执行出错: {e}")
+
+        # 启动线程
+        thread = threading.Thread(target=popper_thread)
+        thread.daemon = True
+        thread.start()
+
+        # 等待线程完成或超时
+        thread.join(timeout_seconds)
+
+        # 处理结果或超时
+        if thread.is_alive():
+            is_timeout[0] = True
+            if self.debug:
+                print(f"Popper学习超时（{timeout_seconds}秒），使用预定义规则")
+            prog = None
+        else:
+            prog = result[0]
+
+        # 处理学习结果
+        if prog:
+            # [处理有效规则的代码]
+            # 保存规则
+            with open(os.path.join(output_dir, "learned_rules.pl"), 'w') as f:
+                for rule in prog:
+                    f.write(f"{rule}\n")
+
+            # 检查是否学到了足够的规则
+            if len(prog) >= 3:  # 期望至少三个规则
+                return prog
+            else:
+                if self.debug:
+                    print("学习到的规则不完整，将使用预定义规则")
+        else:
+            if self.debug:
+                print("Popper未能找到规则，将使用预定义规则")
+
+        # 如果没有有效规则，使用预定义规则
+        if self.debug:
+            print("使用预定义规则...")
+
+        with open(predefined_rules_path, 'r') as f:
+            predefined_rules = [line.strip() for line in f
+                            if line.strip() and not line.strip().startswith('%')]
+
+        return predefined_rules
+
+
+    def learn_rules000(self, output_dir: str) -> List[str]:
         """使用Popper学习规则或使用预定义规则"""
 
         # 创建预定义规则文件
