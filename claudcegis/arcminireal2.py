@@ -20,7 +20,6 @@ from typing import List, Tuple, Dict, Optional
 from dataclasses import dataclass
 import json
 import time
-import logging
 
 # ==================== 配置类 ====================
 
@@ -140,9 +139,6 @@ class PopperFileGenerator:
             "grid_cell(grid(Cells), R, C, Color) :-",
             "    member(cell(R, C, Color), Cells).",
             "",
-            "% 检查网格是否为空",
-            "empty_grid(grid([])).",
-            "",
             "% 获取网格中所有颜色",
             "grid_colors(grid(Cells), Colors) :-",
             "    findall(Color, member(cell(_, _, Color), Cells), AllColors),",
@@ -216,7 +212,6 @@ class PopperFileGenerator:
             "",
             "% 基础网格操作",
             "body_pred(grid_cell,4).",
-            "body_pred(empty_grid,1).",
             "body_pred(grid_colors,2).",
             "body_pred(same_size,2).",
             "body_pred(grid_dimensions,3).",
@@ -246,13 +241,21 @@ class PopperFileGenerator:
             "type(change_color,(grid,int,int,grid)).",
             "type(change_colors,(grid,list,grid)).",
             "type(grid_cell,(grid,int,int,int)).",
+            "type(grid_colors,(grid,list)).",
+            "type(same_size,(grid,grid)).",
+            "type(grid_dimensions,(grid,int,int)).",
+            "type(color_count,(grid,int,int)).",
+            "type(color_0,(int)).",
+            "type(color_1,(int)).",
+            "type(color_2,(int)).",
+            "type(color_3,(int)).",
+            "type(color_4,(int)).",
             "",
             "% ===== 方向定义 =====",
             "direction(transform,(in,out)).",
             "direction(change_color,(in,in,in,out)).",
             "direction(change_colors,(in,in,out)).",
             "direction(grid_cell,(in,out,out,out)).",
-            "direction(empty_grid,(in)).",
             "direction(grid_colors,(in,out)).",
             "direction(same_size,(in,in)).",
             "direction(grid_dimensions,(in,out,out)).",
@@ -386,29 +389,60 @@ class RealPopperInterface:
             'solver': self.config.solver,
         }
 
-        # debug参数可能被接受
+        # 尝试添加调试参数
         if self.config.noisy:
-            settings_dict['debug'] = True
+            settings_dict['debug'] = False
+            settings_dict['verbose'] = False  # 尝试添加verbose
 
         # 创建Settings对象（移除stats参数）
         try:
             settings = self.Settings(**settings_dict)
         except TypeError as e:
-            # 如果debug参数也不被接受，只用基本参数
-            print(f"   ⚠️ 部分参数不被支持，使用基本参数")
-            basic_settings = {
-                'kbpath': str(task_dir),
-                'timeout': self.config.timeout,
-                'max_vars': self.config.max_vars,
-                'max_body': self.config.max_body,
-                'max_rules': self.config.max_rules,
-            }
-            settings = self.Settings(**basic_settings)
+            # 如果某些参数不被接受，逐个移除
+            print(f"   ⚠️ 某些参数不被支持: {str(e)}")
+            print(f"   🔧 尝试使用基本参数集...")
+
+            # 尝试不同的参数组合
+            for attempt in [
+                # 尝试1: 移除verbose
+                {k: v for k, v in settings_dict.items() if k != 'verbose'},
+                # 尝试2: 移除debug和verbose
+                {k: v for k, v in settings_dict.items() if k not in ['debug', 'verbose']},
+                # 尝试3: 只用最基本的参数
+                {
+                    'kbpath': str(task_dir),
+                    'timeout': self.config.timeout,
+                    'max_vars': self.config.max_vars,
+                    'max_body': self.config.max_body,
+                    'max_rules': self.config.max_rules,
+                }
+            ]:
+                try:
+                    settings = self.Settings(**attempt)
+                    print(f"   ✅ 成功创建Settings对象")
+                    settings_dict = attempt
+                    break
+                except TypeError:
+                    continue
+            else:
+                raise e
+
+        # 尝试手动设置调试选项
+        if self.config.noisy:
+            try:
+                # 尝试设置不同的调试属性
+                for debug_attr in ['debug', 'verbose', 'stats', 'show_stats']:
+                    if hasattr(settings, debug_attr):
+                        setattr(settings, debug_attr, True)
+                        print(f"   🔧 设置{debug_attr}=True")
+            except Exception as e:
+                print(f"   ⚠️ 无法设置调试选项: {str(e)}")
 
         if self.config.noisy:
-            print(f"   🔧 Popper设置:")
+            print(f"   🔧 最终Popper设置:")
             for key, value in settings.__dict__.items():
-                print(f"      {key}: {value}")
+                if not key.startswith('_'):
+                    print(f"      {key}: {value}")
 
         return settings
 
@@ -481,9 +515,7 @@ class ARCPopperDemo:
             return result
 
         except Exception as e:
-            import traceback
             print(f"\n❌ 执行失败: {str(e)}")
-            logging.error("详细错误信息：\n%s", traceback.format_exc())
             return {
                 'success': False,
                 'error': str(e),
@@ -851,9 +883,8 @@ max_body(2).
     except Exception as e:
         print(f"❌ 运行失败: {str(e)}")
         import traceback
-        traceback.print_exc()
-        # print(f"统计信息: {stats}"):
-                # print(f"统计信息: {stats}")
+        # traceback.print_exc():
+        #         print(f"统计信息: {stats}")
 
     except ImportError as e:
         print(f"❌ 导入失败: {str(e)}")
