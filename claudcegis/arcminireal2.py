@@ -201,9 +201,9 @@ class PopperFileGenerator:
             "direction(color/1,(out)).",
             "",
             "% ===== Recall定义 - 消除WARNING =====",
-            "recall(grid_cell,4).",
-            "recall(change_color,4).",
-            "recall(color,1).",
+            "recall(grid_cell/4,   20).",
+            "recall(change_color/4,2).",
+            "recall(color/1,       5).",
             "",
             "% ===== 学习控制参数 =====",
             f"max_vars({self.config.max_vars}).",
@@ -215,7 +215,7 @@ class PopperFileGenerator:
             "",
             "% ===== 约束 =====",
             "% 输入输出必须是网格",
-            ":- not body_pred(P,A), head_pred(P,A).",
+            "body_pred(P,A) :- head_pred(P,A).",
             ""
         ]
 
