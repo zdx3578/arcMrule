@@ -4,7 +4,7 @@ ARC程序合成 - 真实Popper Demo
 专注于第一阶段：规则发现和人工验证
 
 特点：
-- 使用真实Popper ILP系统
+- 使用真实Popper ILP系统的Python API
 - 生成标准的Prolog输入文件
 - 专注规则发现，不自动应用到test
 - 提供详细的参数配置指南
@@ -26,7 +26,6 @@ import time
 @dataclass
 class PopperConfig:
     """Popper配置参数"""
-    popper_path: str = "./popper"          # Popper安装路径
     timeout: int = 60                      # 超时时间(秒)
     max_vars: int = 6                      # 最大变量数
     max_body: int = 4                      # 最大体部字面量数
@@ -260,11 +259,11 @@ class PopperFileGenerator:
 # ==================== 真实Popper接口 ====================
 
 class RealPopperInterface:
-    """真实的Popper ILP接口"""
+    """真实的Popper ILP接口 - 使用Python API"""
 
     def __init__(self, config: PopperConfig):
         self.config = config
-        self._verify_popper_installation()
+        self._setup_popper_import()
 
     def learn_program(self, task_dir: Path) -> Optional[str]:
         """调用Popper学习程序"""
@@ -273,113 +272,121 @@ class RealPopperInterface:
         print(f"   超时时间: {self.config.timeout}秒")
 
         try:
-            # 构建Popper命令
-            cmd = self._build_popper_command(task_dir)
-            print(f"   执行命令: {' '.join(cmd)}")
-
-            # 执行Popper
+            # 使用Popper API
             start_time = time.time()
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=self.config.timeout,
-                cwd=self.config.popper_path
-            )
+
+            # 创建Settings对象
+            settings = self._create_popper_settings(task_dir)
+
+            # 调用Popper核心学习函数
+            prog, score, stats = self.learn_solution(settings)
+
             execution_time = time.time() - start_time
-
             print(f"   执行时间: {execution_time:.2f}秒")
-            print(f"   返回码: {result.returncode}")
 
-            if result.returncode == 0:
-                print("   ✅ Popper执行成功")
+            if prog is not None:
+                print("   ✅ Popper学习成功")
 
-                # 解析输出
-                program = self._parse_popper_output(result.stdout)
+                # 显示程序和分数
+                if self.config.stats:
+                    print("   📊 学习统计:")
+                    self._print_stats(stats)
 
-                if program:
-                    print("   ✅ 成功提取程序")
-                    return program
-                else:
-                    print("   ⚠️ 未能提取程序")
-                    print("   完整输出:")
-                    print(self._indent_text(result.stdout))
+                # 格式化程序输出
+                program_str = self._format_program(prog)
+                print(f"   🎯 学到的程序:")
+                print(self._indent_text(program_str))
+                print(f"   📈 程序分数: {score}")
+
+                return program_str
             else:
-                print("   ❌ Popper执行失败")
-                print("   错误信息:")
-                print(self._indent_text(result.stderr))
+                print("   ❌ 未能学到程序")
+                if self.config.stats and stats:
+                    print("   📊 学习统计:")
+                    self._print_stats(stats)
+                return None
 
-            return None
-
-        except subprocess.TimeoutExpired:
-            print(f"   ⏰ Popper执行超时 ({self.config.timeout}秒)")
-            return None
-        except FileNotFoundError:
-            print(f"   ❌ 找不到Popper: {self.config.popper_path}")
+        except ImportError as e:
+            print(f"   ❌ Popper导入失败: {str(e)}")
+            print("   💡 请确保已安装Popper: pip install popper")
             return None
         except Exception as e:
-            print(f"   ❌ 执行错误: {str(e)}")
+            print(f"   ❌ 学习失败: {str(e)}")
+            print(f"   💡 可能需要调整参数或检查输入文件")
             return None
 
-    def _build_popper_command(self, task_dir: Path) -> List[str]:
-        """构建Popper命令"""
-        cmd = [
-            'python',
-            str(Path(self.config.popper_path) / 'popper.py'),
-            str(task_dir),
-            '--timeout', str(self.config.timeout),
-            '--solver', self.config.solver
-        ]
+    def _setup_popper_import(self):
+        """设置Popper导入"""
+        try:
+            # 直接导入Popper模块 (pip安装版本)
+            from popper.util import Settings#, print_prog_score
+            from popper.loop import learn_solution
 
+            # 保存引用
+            self.Settings = Settings
+            self.print_prog_score = Settings.print_prog_score
+            self.learn_solution = learn_solution
+
+            print(f"   ✅ Popper API导入成功")
+
+        except ImportError as e:
+            import traceback
+            traceback.print_exc()
+            raise ImportError(f"无法导入Popper API: {str(e)}\n请安装Popper: pip install popper")
+
+    def _create_popper_settings(self, task_dir: Path):
+        """创建Popper设置对象"""
+        # 创建设置字典
+        settings_dict = {
+            'kbpath': str(task_dir),
+            'timeout': self.config.timeout,
+            'max_vars': self.config.max_vars,
+            'max_body': self.config.max_body,
+            'max_rules': self.config.max_rules,
+            'solver': self.config.solver,
+        }
+
+        # 添加可选参数
         if self.config.noisy:
-            cmd.append('--noisy')
+            settings_dict['debug'] = True
 
         if self.config.stats:
-            cmd.append('--stats')
+            settings_dict['stats'] = True
 
-        return cmd
+        # 创建Settings对象
+        settings = self.Settings(**settings_dict)
 
-    def _parse_popper_output(self, output: str) -> Optional[str]:
-        """解析Popper输出，提取学到的程序"""
-        lines = output.strip().split('\n')
+        if self.config.noisy:
+            print(f"   🔧 Popper设置:")
+            for key, value in settings_dict.items():
+                print(f"      {key}: {value}")
 
-        # 查找程序段
-        program_lines = []
-        in_program = False
+        return settings
 
-        for line in lines:
-            line = line.strip()
+    def _format_program(self, prog) -> str:
+        """格式化程序输出"""
+        if isinstance(prog, str):
+            return prog
+        elif hasattr(prog, '__iter__'):
+            # 如果prog是规则列表
+            return '\n'.join(str(rule) for rule in prog)
+        else:
+            return str(prog)
 
-            # 检测程序开始
-            if 'Program:' in line or 'SOLUTION' in line:
-                in_program = True
-                continue
+    def _print_stats(self, stats: dict):
+        """打印学习统计信息"""
+        if not stats:
+            return
 
-            # 检测程序结束
-            if in_program and (line.startswith('Precision:') or
-                              line.startswith('Recall:') or
-                              line.startswith('Time:') or
-                              line == ''):
-                break
+        important_stats = [
+            'num_pos', 'num_neg', 'num_rules',
+            'learning_time', 'total_time',
+            'num_literals', 'program_size'
+        ]
 
-            # 收集程序行
-            if in_program and line and not line.startswith('%'):
-                program_lines.append(line)
-
-        if program_lines:
-            return '\n'.join(program_lines)
-
-        return None
-
-    def _verify_popper_installation(self):
-        """验证Popper是否正确安装"""
-        popper_script = Path(self.config.popper_path) / 'popper.py'
-
-        if not popper_script.exists():
-            raise FileNotFoundError(
-                f"Popper脚本未找到: {popper_script}\n"
-                f"请确保已正确安装Popper到: {self.config.popper_path}"
-            )
+        for stat in important_stats:
+            if stat in stats:
+                print(f"      {stat}: {stats[stat]}")
 
     def _indent_text(self, text: str, indent: str = "      ") -> str:
         """为文本添加缩进"""
@@ -554,21 +561,8 @@ def setup_popper_config() -> PopperConfig:
     print("🔧 Popper配置向导")
     print("-" * 30)
 
-    # 获取Popper路径
-    print("请输入Popper安装路径:")
-    print("(如果已克隆到当前目录，直接按回车)")
-    popper_path = input("Popper路径 [./popper]: ").strip()
-    if not popper_path:
-        popper_path = "./popper"
-
-    # 验证路径
-    if not Path(popper_path).exists():
-        print(f"⚠️ 路径不存在: {popper_path}")
-        print("请确保已正确安装Popper")
-        print("安装方法: git clone https://github.com/logic-and-learning-lab/Popper.git")
-
     # 其他参数
-    print(f"\n其他参数 (直接按回车使用默认值):")
+    print(f"参数设置 (直接按回车使用默认值):")
 
     timeout = input("超时时间/秒 [60]: ").strip()
     timeout = int(timeout) if timeout else 60
@@ -577,7 +571,6 @@ def setup_popper_config() -> PopperConfig:
     max_vars = int(max_vars) if max_vars else 6
 
     return PopperConfig(
-        popper_path=popper_path,
         timeout=timeout,
         max_vars=max_vars
     )
@@ -593,7 +586,6 @@ def main():
     config = setup_popper_config()
 
     print(f"\n📋 配置总结:")
-    print(f"   Popper路径: {config.popper_path}")
     print(f"   超时时间: {config.timeout}秒")
     print(f"   最大变量: {config.max_vars}")
     print(f"   最大规则: {config.max_rules}")
@@ -643,13 +635,6 @@ def quick_demo():
     # 使用默认配置
     config = PopperConfig()
 
-    # 检查Popper是否存在
-    if not Path(config.popper_path).exists():
-        print(f"❌ 未找到Popper: {config.popper_path}")
-        print("请先安装Popper:")
-        print("git clone https://github.com/logic-and-learning-lab/Popper.git")
-        return
-
     demo = ARCPopperDemo(config)
 
     # 运行一个简单任务
@@ -666,8 +651,6 @@ def quick_demo():
     else:
         print("\n💡 如需调试，请运行完整配置模式")
 
-
-
 # ==================== 额外工具函数 ====================
 
 def install_popper_guide():
@@ -675,112 +658,148 @@ def install_popper_guide():
     print("🔧 Popper安装指南")
     print("="*40)
     print()
-    print("1. 克隆Popper仓库:")
-    print("   git clone https://github.com/logic-and-learning-lab/Popper.git")
+    print("1. 使用pip安装 (推荐):")
+    print("   pip install popper")
     print()
-    print("2. 进入目录并安装依赖:")
-    print("   cd Popper")
-    print("   pip install -r requirements.txt")
-    print()
-    print("3. 安装SAT求解器 (推荐RC2):")
+    print("2. 安装SAT求解器:")
     print("   pip install python-sat")
     print()
-    print("4. 验证安装:")
-    print("   python popper.py examples/robots1")
+    print("3. 验证安装:")
+    print("   python -c \"from popper.util import Settings; print('Popper API OK')\"")
     print()
-    print("5. 如果成功，你会看到学到的程序输出")
+    print("4. 运行ARC Demo:")
+    print("   python arc_minimal_real_popper_demo.py quick")
     print()
     print("📝 注意事项:")
     print("- 确保Python版本 >= 3.7")
-    print("- 如果遇到问题，查看Popper的README文档")
-    print("- 对于复杂任务，可能需要调整timeout参数")
+    print("- 如果pip安装失败，可以从源码安装:")
+    print("  git clone https://github.com/logic-and-learning-lab/Popper.git")
+    print("  cd Popper && pip install -e .")
+    print()
+    print("🐛 常见问题:")
+    print("- ImportError: 重新安装 pip install --force-reinstall popper")
+    print("- 学习失败: 尝试增加timeout参数")
+    print("- 内存不足: 减少max_vars参数")
 
-def validate_popper_installation(popper_path: str) -> bool:
+def validate_popper_installation() -> bool:
     """验证Popper安装是否正确"""
-    print(f"🔍 验证Popper安装: {popper_path}")
+    print(f"🔍 验证Popper安装")
 
-    popper_script = Path(popper_path) / 'popper.py'
-
-    # 检查主脚本
-    if not popper_script.exists():
-        print(f"❌ 未找到popper.py: {popper_script}")
-        return False
-
-    # 检查示例目录
-    examples_dir = Path(popper_path) / 'examples'
-    if not examples_dir.exists():
-        print(f"❌ 未找到examples目录: {examples_dir}")
-        return False
-
-    # 尝试运行简单测试
+    # 尝试导入Popper API
     try:
-        result = subprocess.run(
-            ['python', str(popper_script), '--help'],
-            capture_output=True,
-            text=True,
-            timeout=10,
-            cwd=popper_path
-        )
+        from popper.util import Settings, print_prog_score
+        from popper.loop import learn_solution
 
-        if result.returncode == 0:
-            print("✅ Popper安装验证成功")
-            return True
-        else:
-            print(f"❌ Popper执行失败: {result.stderr}")
-            return False
+        print("✅ Popper API导入成功")
 
-    except subprocess.TimeoutExpired:
-        print("❌ Popper响应超时")
-        return False
-    except FileNotFoundError:
-        print("❌ Python解释器未找到")
+        # 尝试创建Settings对象
+        temp_dir = Path("./temp_test")
+        temp_dir.mkdir(exist_ok=True)
+
+        try:
+            settings = Settings(kbpath=str(temp_dir))
+            print("✅ Settings对象创建成功")
+            temp_dir.rmdir()  # 清理
+        except Exception as e:
+            print(f"⚠️ Settings创建警告: {str(e)}")
+            temp_dir.rmdir()  # 清理
+
+        return True
+
+    except ImportError as e:
+        print(f"❌ Popper API导入失败: {str(e)}")
+        print("💡 请安装Popper: pip install popper")
         return False
     except Exception as e:
         print(f"❌ 验证失败: {str(e)}")
         return False
 
 def run_popper_example():
-    """运行Popper内置示例"""
-    print("🧪 运行Popper内置示例")
+    """运行Popper测试"""
+    print("🧪 运行Popper API测试")
 
-    config = PopperConfig()
-
-    if not validate_popper_installation(config.popper_path):
+    if not validate_popper_installation():
         print("\n请先正确安装Popper")
         install_popper_guide()
         return
 
-    # 运行robots示例
-    examples_dir = Path(config.popper_path) / 'examples'
-    robots_example = examples_dir / 'robots1'
-
-    if not robots_example.exists():
-        print(f"❌ 未找到robots示例: {robots_example}")
-        return
-
-    print(f"运行示例: {robots_example}")
+    # 创建简单测试
+    print(f"创建简单测试...")
 
     try:
-        result = subprocess.run(
-            ['python', 'popper.py', str(robots_example)],
-            capture_output=True,
-            text=True,
-            timeout=30,
-            cwd=config.popper_path
-        )
+        from popper.util import Settings, print_prog_score
+        from popper.loop import learn_solution
 
-        if result.returncode == 0:
-            print("✅ 示例运行成功")
+        # 创建临时测试目录
+        test_dir = Path("./popper_test")
+        test_dir.mkdir(exist_ok=True)
+
+        # 创建简单示例文件
+        (test_dir / "exs.pl").write_text("""
+% 简单测试示例
+pos(even(0)).
+pos(even(2)).
+pos(even(4)).
+neg(even(1)).
+neg(even(3)).
+""")
+
+        (test_dir / "bk.pl").write_text("""
+% 背景知识
+succ(0,1).
+succ(1,2).
+succ(2,3).
+succ(3,4).
+""")
+
+        (test_dir / "bias.pl").write_text("""
+% 偏置
+head_pred(even,1).
+body_pred(succ,2).
+max_vars(3).
+max_body(2).
+""")
+
+        # 创建设置并学习
+        settings = Settings(kbpath=str(test_dir))
+
+        start_time = time.time()
+        prog, score, stats = learn_solution(settings)
+        execution_time = time.time() - start_time
+
+        print(f"执行时间: {execution_time:.2f}秒")
+
+        if prog is not None:
+            print("✅ 测试运行成功")
             print("\n学到的程序:")
-            print(result.stdout)
-        else:
-            print(f"❌ 示例运行失败")
-            print(f"错误信息: {result.stderr}")
+            print_prog_score(prog, score)
 
-    except subprocess.TimeoutExpired:
-        print("❌ 示例运行超时")
+            if stats:
+                print(f"\n统计信息:")
+                for key, value in stats.items():
+                    print(f"  {key}: {value}")
+        else:
+            print("❌ 测试运行失败 - 未学到程序")
+            if stats:
+                print(f"统计信息: {stats}")
+
+        # 清理
+        shutil.rmtree(test_dir)
+
+    except ImportError as e:
+        print(f"❌ 导入失败: {str(e)}")
     except Exception as e:
         print(f"❌ 运行失败: {str(e)}")
+        import traceback
+        traceback.print_exc()
+                # print(f"统计信息: {stats}")
+
+    except ImportError as e:
+        print(f"❌ 导入失败: {str(e)}")
+    except Exception as e:
+        print(f"❌ 运行失败: {str(e)}")
+        import traceback
+        traceback.print_exc()
 
 def interactive_config():
     """交互式配置模式"""
@@ -889,4 +908,3 @@ if __name__ == "__main__":
             show_usage()
     else:
         main()
-
