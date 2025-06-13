@@ -20,7 +20,6 @@ from typing import List, Tuple, Dict, Optional
 from dataclasses import dataclass
 import json
 import time
-import logging
 
 # ==================== 配置类 ====================
 
@@ -100,12 +99,9 @@ class PopperFileGenerator:
 
         file_path.write_text('\n'.join(content), encoding='utf-8')
 
-        # 添加调试输出
-        print(f"   📄 生成的exs.pl内容:")
-        for i, line in enumerate(content):
-            print(f"      {i+1:3d}: {line}")
-        print(f"   📁 文件路径: {file_path}")
-        print(f"   📊 文件大小: {file_path.stat().st_size} bytes")
+        # 简化调试输出
+        if self.config.noisy:
+            print(f"   📄 生成exs.pl: {len(content)}行")
 
         # 添加调试输出
         print(f"   📄 生成的bias.pl内容:")
@@ -139,9 +135,6 @@ class PopperFileGenerator:
             "% 获取网格中的单元格",
             "grid_cell(grid(Cells), R, C, Color) :-",
             "    member(cell(R, C, Color), Cells).",
-            "",
-            "% 检查网格是否为空",
-            "empty_grid(grid([])).",
             "",
             "% 获取网格中所有颜色",
             "grid_colors(grid(Cells), Colors) :-",
@@ -216,7 +209,6 @@ class PopperFileGenerator:
             "",
             "% 基础网格操作",
             "body_pred(grid_cell,4).",
-            "body_pred(empty_grid,1).",
             "body_pred(grid_colors,2).",
             "body_pred(same_size,2).",
             "body_pred(grid_dimensions,3).",
@@ -246,13 +238,21 @@ class PopperFileGenerator:
             "type(change_color,(grid,int,int,grid)).",
             "type(change_colors,(grid,list,grid)).",
             "type(grid_cell,(grid,int,int,int)).",
+            "type(grid_colors,(grid,list)).",
+            "type(same_size,(grid,grid)).",
+            "type(grid_dimensions,(grid,int,int)).",
+            "type(color_count,(grid,int,int)).",
+            "type(color_0,(int)).",
+            "type(color_1,(int)).",
+            "type(color_2,(int)).",
+            "type(color_3,(int)).",
+            "type(color_4,(int)).",
             "",
             "% ===== 方向定义 =====",
             "direction(transform,(in,out)).",
             "direction(change_color,(in,in,in,out)).",
             "direction(change_colors,(in,in,out)).",
             "direction(grid_cell,(in,out,out,out)).",
-            "direction(empty_grid,(in)).",
             "direction(grid_colors,(in,out)).",
             "direction(same_size,(in,in)).",
             "direction(grid_dimensions,(in,out,out)).",
@@ -297,21 +297,15 @@ class RealPopperInterface:
         print(f"   任务目录: {task_dir}")
         print(f"   超时时间: {self.config.timeout}秒")
 
-        # 添加文件检查
-        print(f"   📁 检查Popper输入文件:")
-        for filename in ['exs.pl', 'bk.pl', 'bias.pl']:
-            filepath = task_dir / filename
-            if filepath.exists():
-                print(f"      ✅ {filename} 存在 ({filepath.stat().st_size} bytes)")
-                if filename == 'bias.pl':
-                    # 特别检查bias.pl中的direction定义
-                    content = filepath.read_text(encoding='utf-8')
-                    direction_lines = [line.strip() for line in content.split('\n') if line.strip().startswith('direction(')]
-                    print(f"      📋 bias.pl中的direction定义 ({len(direction_lines)}条):")
-                    for line in direction_lines:
-                        print(f"         {line}")
-            else:
-                print(f"      ❌ {filename} 不存在!")
+        # 简化文件检查
+        if self.config.noisy:
+            print(f"   📁 检查Popper文件:")
+            for filename in ['exs.pl', 'bk.pl', 'bias.pl']:
+                filepath = task_dir / filename
+                if filepath.exists():
+                    print(f"      ✅ {filename} ({filepath.stat().st_size} bytes)")
+                else:
+                    print(f"      ❌ {filename} 不存在!")
 
         try:
             # 使用Popper API
@@ -330,7 +324,7 @@ class RealPopperInterface:
                 print("   ✅ Popper学习成功")
 
                 # 显示程序和分数
-                if self.config.stats:
+                if self.config.stats and stats:
                     print("   📊 学习统计:")
                     self._print_stats(stats)
 
@@ -342,7 +336,7 @@ class RealPopperInterface:
 
                 return program_str
             else:
-                print("   ❌ 未能学到程序")
+                print("   ❌ 未能学到程序 (NO SOLUTION)")
                 if self.config.stats and stats:
                     print("   📊 学习统计:")
                     self._print_stats(stats)
@@ -352,9 +346,18 @@ class RealPopperInterface:
             print(f"   ❌ Popper导入失败: {str(e)}")
             print("   💡 请确保已安装Popper: pip install popper")
             return None
+        except AttributeError as e:
+            print(f"   ❌ Popper API属性错误: {str(e)}")
+            print("   💡 可能是stats对象类型不匹配")
+            return None
         except Exception as e:
             print(f"   ❌ 学习失败: {str(e)}")
-            print(f"   💡 可能需要调整参数或检查输入文件")
+            print(f"   💡 错误类型: {type(e).__name__}")
+            # 打印详细错误信息用于调试
+            import traceback
+            if self.config.noisy:
+                print("   🔍 详细错误:")
+                traceback.print_exc()
             return None
 
     def _setup_popper_import(self):
@@ -386,29 +389,57 @@ class RealPopperInterface:
             'solver': self.config.solver,
         }
 
-        # debug参数可能被接受
+        # 尝试添加调试参数
         if self.config.noisy:
             settings_dict['debug'] = True
+            settings_dict['verbose'] = True  # 尝试添加verbose
 
         # 创建Settings对象（移除stats参数）
         try:
             settings = self.Settings(**settings_dict)
         except TypeError as e:
-            # 如果debug参数也不被接受，只用基本参数
-            print(f"   ⚠️ 部分参数不被支持，使用基本参数")
-            basic_settings = {
-                'kbpath': str(task_dir),
-                'timeout': self.config.timeout,
-                'max_vars': self.config.max_vars,
-                'max_body': self.config.max_body,
-                'max_rules': self.config.max_rules,
-            }
-            settings = self.Settings(**basic_settings)
+            # 如果某些参数不被接受，逐个移除
+            print(f"   ⚠️ 某些参数不被支持: {str(e)}")
+            print(f"   🔧 尝试使用基本参数集...")
+
+            # 尝试不同的参数组合
+            for attempt in [
+                # 尝试1: 移除verbose
+                {k: v for k, v in settings_dict.items() if k != 'verbose'},
+                # 尝试2: 移除debug和verbose
+                {k: v for k, v in settings_dict.items() if k not in ['debug', 'verbose']},
+                # 尝试3: 只用最基本的参数
+                {
+                    'kbpath': str(task_dir),
+                    'timeout': self.config.timeout,
+                    'max_vars': self.config.max_vars,
+                    'max_body': self.config.max_body,
+                    'max_rules': self.config.max_rules,
+                }
+            ]:
+                try:
+                    settings = self.Settings(**attempt)
+                    print(f"   ✅ 成功创建Settings对象")
+                    settings_dict = attempt
+                    break
+                except TypeError:
+                    continue
+            else:
+                raise e
+
+        # 尝试手动设置调试选项
+        if self.config.noisy:
+            try:
+                # 尝试设置不同的调试属性
+                for debug_attr in ['debug', 'verbose',  'show_stats']:
+                    if hasattr(settings, debug_attr):
+                        setattr(settings, debug_attr, True)
+                        print(f"   🔧 设置{debug_attr}=True")
+            except Exception as e:
+                print(f"   ⚠️ 无法设置调试选项: {str(e)}")
 
         if self.config.noisy:
-            print(f"   🔧 Popper设置:")
-            for key, value in settings.__dict__.items():
-                print(f"      {key}: {value}")
+            print(f"   🔧 Popper设置已创建")
 
         return settings
 
@@ -422,20 +453,29 @@ class RealPopperInterface:
         else:
             return str(prog)
 
-    def _print_stats(self, stats: dict):
+    def _print_stats(self, stats):
         """打印学习统计信息"""
         if not stats:
             return
 
-        important_stats = [
-            'num_pos', 'num_neg', 'num_rules',
-            'learning_time', 'total_time',
-            'num_literals', 'program_size'
-        ]
+        # 检查stats类型，防止'bool' object has no attribute 'duration'错误
+        if isinstance(stats, bool):
+            print(f"      stats: {stats} (boolean)")
+            return
 
-        for stat in important_stats:
-            if stat in stats:
-                print(f"      {stat}: {stats[stat]}")
+        if isinstance(stats, dict):
+            important_stats = [
+                'num_pos', 'num_neg', 'num_rules',
+                'learning_time', 'total_time',
+                'num_literals', 'program_size'
+            ]
+
+            for stat in important_stats:
+                if stat in stats:
+                    print(f"      {stat}: {stats[stat]}")
+        else:
+            print(f"      stats类型: {type(stats)}")
+            print(f"      stats内容: {str(stats)}")
 
     def _indent_text(self, text: str, indent: str = "      ") -> str:
         """为文本添加缩进"""
@@ -481,9 +521,7 @@ class ARCPopperDemo:
             return result
 
         except Exception as e:
-            import traceback
             print(f"\n❌ 执行失败: {str(e)}")
-            logging.error("详细错误信息：\n%s", traceback.format_exc())
             return {
                 'success': False,
                 'error': str(e),
@@ -851,9 +889,8 @@ max_body(2).
     except Exception as e:
         print(f"❌ 运行失败: {str(e)}")
         import traceback
-        traceback.print_exc()
-        # print(f"统计信息: {stats}"):
-                # print(f"统计信息: {stats}")
+        # traceback.print_exc():
+        #         print(f"统计信息: {stats}")
 
     except ImportError as e:
         print(f"❌ 导入失败: {str(e)}")

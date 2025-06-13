@@ -99,12 +99,9 @@ class PopperFileGenerator:
 
         file_path.write_text('\n'.join(content), encoding='utf-8')
 
-        # 添加调试输出
-        print(f"   📄 生成的exs.pl内容:")
-        for i, line in enumerate(content):
-            print(f"      {i+1:3d}: {line}")
-        print(f"   📁 文件路径: {file_path}")
-        print(f"   📊 文件大小: {file_path.stat().st_size} bytes")
+        # 简化调试输出
+        if self.config.noisy:
+            print(f"   📄 生成exs.pl: {len(content)}行")
 
         # 添加调试输出
         print(f"   📄 生成的bias.pl内容:")
@@ -127,26 +124,26 @@ class PopperFileGenerator:
         else:
             return "grid([])"  # 空网格
 
+
+
+
+
+
     def _generate_background_file(self, file_path: Path):
-        """生成背景知识文件 (bk.pl)"""
+        """生成背景知识文件 (bk.pl) - 完全避免is/2"""
         content = [
-            "% ARC任务背景知识",
-            "% 定义网格操作和颜色转换的基础谓词",
+            "% ARC任务背景知识 - 避免is/2触发Popper点空调用错误",
+            "% 只保留不含算术运算的基础谓词",
             "",
-            "% ===== 网格基础操作 =====",
+            "% ===== 网格单元格操作 =====",
             "",
-            "% 获取网格中的单元格",
+            "% 获取网格中的单元格 - 纯逻辑，无算术",
             "grid_cell(grid(Cells), R, C, Color) :-",
             "    member(cell(R, C, Color), Cells).",
             "",
-            "% 获取网格中所有颜色",
-            "grid_colors(grid(Cells), Colors) :-",
-            "    findall(Color, member(cell(_, _, Color), Cells), AllColors),",
-            "    sort(AllColors, Colors).",
+            "% ===== 颜色替换操作 =====",
             "",
-            "% ===== 颜色转换操作 =====",
-            "",
-            "% 单一颜色替换",
+            "% 单一颜色替换 - 纯逻辑",
             "change_color(grid(Cells), OldColor, NewColor, grid(NewCells)) :-",
             "    maplist(replace_color(OldColor, NewColor), Cells, NewCells).",
             "",
@@ -154,117 +151,59 @@ class PopperFileGenerator:
             "replace_color(OldColor, NewColor, cell(R, C, OldColor), cell(R, C, NewColor)) :- !.",
             "replace_color(_, _, Cell, Cell).",
             "",
-            "% 批量颜色替换",
-            "change_colors(Grid, [], Grid).",
-            "change_colors(Grid, [OldColor-NewColor|Rest], FinalGrid) :-",
-            "    change_color(Grid, OldColor, NewColor, TempGrid),",
-            "    change_colors(TempGrid, Rest, FinalGrid).",
+            "% ===== 颜色常量定义 =====",
             "",
-            "% ===== 网格分析谓词 =====",
-            "",
-            "% 统计颜色出现次数",
-            "color_count(grid(Cells), Color, Count) :-",
-            "    include(has_color(Color), Cells, ColorCells),",
-            "    length(ColorCells, Count).",
-            "",
-            "has_color(Color, cell(_, _, Color)).",
-            "",
-            "% 检查两个网格大小是否相同",
-            "same_size(grid(Cells1), grid(Cells2)) :-",
-            "    grid_dimensions(grid(Cells1), W1, H1),",
-            "    grid_dimensions(grid(Cells2), W2, H2),",
-            "    W1 = W2, H1 = H2.",
-            "",
-            "% 获取网格维度",
-            "grid_dimensions(grid(Cells), Width, Height) :-",
-            "    (Cells = [] ->",
-            "        Width = 0, Height = 0",
-            "    ;   findall(R, member(cell(R, _, _), Cells), Rs),",
-            "        findall(C, member(cell(_, C, _), Cells), Cs),",
-            "        max_list([0|Rs], MaxR), max_list([0|Cs], MaxC),",
-            "        Width is MaxC + 1, Height is MaxR + 1",
-            "    ).",
-            "",
-            "% ===== 工具谓词 =====",
-            "",
-            "% 获取列表中的最大值",
-            "max_list([X], X) :- !.",
-            "max_list([H|T], Max) :-",
-            "    max_list(T, MaxT),",
-            "    Max is max(H, MaxT).",
+            "color(0).",
+            "color(1).",
+            "color(2).",
+            "color(3).",
+            "color(4).",
             ""
         ]
 
         file_path.write_text('\n'.join(content), encoding='utf-8')
 
+        if self.config.noisy:
+            print(f"   📄 生成bk.pl: {len(content)}行 (无is/2版本)")
+
     def _generate_bias_file(self, file_path: Path):
-        """生成偏置文件 (bias.pl)"""
+        """生成偏置文件 (bias.pl) - 只保留无is/2的谓词"""
         content = [
-            "% ARC任务偏置文件",
-            "% 定义学习空间和约束",
+            "% ARC任务偏置文件 - 避免is/2触发的Popper错误",
+            "% 只包含纯逻辑谓词，无算术运算",
             "",
             "% ===== 头谓词定义 =====",
             "% 我们要学习的目标谓词",
             "head_pred(transform,2).",
             "",
             "% ===== 体谓词定义 =====",
-            "% 可以在规则体中使用的谓词",
+            "% 只保留安全的、无算术的谓词",
             "",
-            "% 基础网格操作",
+            "% 网格操作 - 纯逻辑",
             "body_pred(grid_cell,4).",
-            "body_pred(grid_colors,2).",
-            "body_pred(same_size,2).",
-            "body_pred(grid_dimensions,3).",
             "",
-            "% 颜色转换操作",
+            "% 颜色转换操作 - 纯逻辑",
             "body_pred(change_color,4).",
-            "body_pred(change_colors,3).",
-            "body_pred(color_count,3).",
             "",
-            "% 常量定义",
-            "% 允许使用的颜色值",
-            "body_pred(color_0,0).",
-            "body_pred(color_1,0).",
-            "body_pred(color_2,0).",
-            "body_pred(color_3,0).",
-            "body_pred(color_4,0).",
-            "",
-            "% 定义常量事实",
-            "color_0(0).",
-            "color_1(1).",
-            "color_2(2).",
-            "color_3(3).",
-            "color_4(4).",
+            "% 颜色常量 - 1元谓词",
+            "body_pred(color,1).",
             "",
             "% ===== 类型定义 =====",
             "type(transform,(grid,grid)).",
-            "type(change_color,(grid,int,int,grid)).",
-            "type(change_colors,(grid,list,grid)).",
             "type(grid_cell,(grid,int,int,int)).",
-            "type(grid_colors,(grid,list)).",
-            "type(same_size,(grid,grid)).",
-            "type(grid_dimensions,(grid,int,int)).",
-            "type(color_count,(grid,int,int)).",
-            "type(color_0,(int)).",
-            "type(color_1,(int)).",
-            "type(color_2,(int)).",
-            "type(color_3,(int)).",
-            "type(color_4,(int)).",
+            "type(change_color,(grid,int,int,grid)).",
+            "type(color,(int)).",
             "",
             "% ===== 方向定义 =====",
-            "direction(transform,(in,out)).",
-            "direction(change_color,(in,in,in,out)).",
-            "direction(change_colors,(in,in,out)).",
-            "direction(grid_cell,(in,out,out,out)).",
-            "direction(grid_colors,(in,out)).",
-            "direction(same_size,(in,in)).",
-            "direction(grid_dimensions,(in,out,out)).",
-            "direction(color_count,(in,in,out)).",
-            "direction(color_0,(out)).",
-            "direction(color_1,(out)).",
-            "direction(color_2,(out)).",
-            "direction(color_3,(out)).",
-            "direction(color_4,(out)).",
+            "direction(transform/2,(in,out)).",
+            "direction(grid_cell/4,(in,out,out,out)).",
+            "direction(change_color/4,(in,in,in,out)).",
+            "direction(color/1,(out)).",
+            "",
+            "% ===== Recall定义 - 消除WARNING =====",
+            "recall(grid_cell,4).",
+            "recall(change_color,4).",
+            "recall(color,1).",
             "",
             "% ===== 学习控制参数 =====",
             f"max_vars({self.config.max_vars}).",
@@ -277,13 +216,15 @@ class PopperFileGenerator:
             "% ===== 约束 =====",
             "% 输入输出必须是网格",
             ":- not body_pred(P,A), head_pred(P,A).",
-            "",
-            "% 防止生成过于复杂的规则",
-            ":- max_clauses(C), C > 3.",
             ""
         ]
 
         file_path.write_text('\n'.join(content), encoding='utf-8')
+
+        if self.config.noisy:
+            print(f"   📄 生成bias.pl: {len(content)}行 (纯逻辑版本)")
+
+
 
 # ==================== 真实Popper接口 ====================
 
@@ -300,21 +241,15 @@ class RealPopperInterface:
         print(f"   任务目录: {task_dir}")
         print(f"   超时时间: {self.config.timeout}秒")
 
-        # 添加文件检查
-        print(f"   📁 检查Popper输入文件:")
-        for filename in ['exs.pl', 'bk.pl', 'bias.pl']:
-            filepath = task_dir / filename
-            if filepath.exists():
-                print(f"      ✅ {filename} 存在 ({filepath.stat().st_size} bytes)")
-                if filename == 'bias.pl':
-                    # 特别检查bias.pl中的direction定义
-                    content = filepath.read_text(encoding='utf-8')
-                    direction_lines = [line.strip() for line in content.split('\n') if line.strip().startswith('direction(')]
-                    print(f"      📋 bias.pl中的direction定义 ({len(direction_lines)}条):")
-                    for line in direction_lines:
-                        print(f"         {line}")
-            else:
-                print(f"      ❌ {filename} 不存在!")
+        # 简化文件检查
+        if self.config.noisy:
+            print(f"   📁 检查Popper文件:")
+            for filename in ['exs.pl', 'bk.pl', 'bias.pl']:
+                filepath = task_dir / filename
+                if filepath.exists():
+                    print(f"      ✅ {filename} ({filepath.stat().st_size} bytes)")
+                else:
+                    print(f"      ❌ {filename} 不存在!")
 
         try:
             # 使用Popper API
@@ -333,7 +268,7 @@ class RealPopperInterface:
                 print("   ✅ Popper学习成功")
 
                 # 显示程序和分数
-                if self.config.stats:
+                if self.config.stats and stats:
                     print("   📊 学习统计:")
                     self._print_stats(stats)
 
@@ -345,7 +280,7 @@ class RealPopperInterface:
 
                 return program_str
             else:
-                print("   ❌ 未能学到程序")
+                print("   ❌ 未能学到程序 (NO SOLUTION)")
                 if self.config.stats and stats:
                     print("   📊 学习统计:")
                     self._print_stats(stats)
@@ -355,9 +290,18 @@ class RealPopperInterface:
             print(f"   ❌ Popper导入失败: {str(e)}")
             print("   💡 请确保已安装Popper: pip install popper")
             return None
+        except AttributeError as e:
+            print(f"   ❌ Popper API属性错误: {str(e)}")
+            print("   💡 可能是stats对象类型不匹配")
+            return None
         except Exception as e:
             print(f"   ❌ 学习失败: {str(e)}")
-            print(f"   💡 可能需要调整参数或检查输入文件")
+            print(f"   💡 错误类型: {type(e).__name__}")
+            # 打印详细错误信息用于调试
+            import traceback
+            if self.config.noisy:
+                print("   🔍 详细错误:")
+                traceback.print_exc()
             return None
 
     def _setup_popper_import(self):
@@ -391,8 +335,8 @@ class RealPopperInterface:
 
         # 尝试添加调试参数
         if self.config.noisy:
-            settings_dict['debug'] = False
-            settings_dict['verbose'] = False  # 尝试添加verbose
+            settings_dict['debug'] = True
+            settings_dict['verbose'] = True  # 尝试添加verbose
 
         # 创建Settings对象（移除stats参数）
         try:
@@ -430,8 +374,8 @@ class RealPopperInterface:
         # 尝试手动设置调试选项
         if self.config.noisy:
             try:
-                # 尝试设置不同的调试属性
-                for debug_attr in ['debug', 'verbose', 'stats', 'show_stats']:
+                # 尝试设置不同的调试属性 - 移除'stats'避免问题
+                for debug_attr in ['debug', 'verbose', 'show_stats']:
                     if hasattr(settings, debug_attr):
                         setattr(settings, debug_attr, True)
                         print(f"   🔧 设置{debug_attr}=True")
@@ -439,10 +383,7 @@ class RealPopperInterface:
                 print(f"   ⚠️ 无法设置调试选项: {str(e)}")
 
         if self.config.noisy:
-            print(f"   🔧 最终Popper设置:")
-            for key, value in settings.__dict__.items():
-                if not key.startswith('_'):
-                    print(f"      {key}: {value}")
+            print(f"   🔧 Popper设置已创建")
 
         return settings
 
@@ -456,20 +397,29 @@ class RealPopperInterface:
         else:
             return str(prog)
 
-    def _print_stats(self, stats: dict):
+    def _print_stats(self, stats):
         """打印学习统计信息"""
         if not stats:
             return
 
-        important_stats = [
-            'num_pos', 'num_neg', 'num_rules',
-            'learning_time', 'total_time',
-            'num_literals', 'program_size'
-        ]
+        # 检查stats类型，防止'bool' object has no attribute 'duration'错误
+        if isinstance(stats, bool):
+            print(f"      stats: {stats} (boolean)")
+            return
 
-        for stat in important_stats:
-            if stat in stats:
-                print(f"      {stat}: {stats[stat]}")
+        if isinstance(stats, dict):
+            important_stats = [
+                'num_pos', 'num_neg', 'num_rules',
+                'learning_time', 'total_time',
+                'num_literals', 'program_size'
+            ]
+
+            for stat in important_stats:
+                if stat in stats:
+                    print(f"      {stat}: {stats[stat]}")
+        else:
+            print(f"      stats类型: {type(stats)}")
+            print(f"      stats内容: {str(stats)}")
 
     def _indent_text(self, text: str, indent: str = "      ") -> str:
         """为文本添加缩进"""
